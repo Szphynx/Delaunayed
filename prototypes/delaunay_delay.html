@@ -298,6 +298,7 @@ function rebuildVoroOverlay(){
 /* ---------- audio init ---------- */
 async function initAudio(){
   if(AC)return;
+  const u=new Audio(AUDIO_URI);u.volume=0;u.play().catch(()=>{}); // iOS: unmutes WebAudio from the ring/silent switch
   AC=new (window.AudioContext||window.webkitAudioContext)();
   const ab=await fetch(AUDIO_URI).then(r=>r.arrayBuffer());buffer=await AC.decodeAudioData(ab);
   masterIn=AC.createGain();dryGain=AC.createGain();wetGain=AC.createGain();freezeMaster=AC.createGain();

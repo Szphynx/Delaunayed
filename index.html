@@ -106,6 +106,16 @@
       <p>The complete Max-for-Live-styled instrument - barycentric multitap, Voronoi freeze-mosaic, per-element pitch/FX inserts, mixer, tempo-sync, presets. Sample drag-and-drop &amp; mic in.</p></div>
     <a class="cta" href="prototypes/delaunay_delay.html" target="_blank" rel="noopener">Open device &#8599;</a>
   </div>
+  <div class="launch" style="margin-top:12px">
+    <div class="lx"><b>WFC Multitap + Learn-from-example</b>
+      <p>Wave-Function-Collapse tap grid &mdash; learn adjacency rules from an example groove, then generate endless coherent variations.</p></div>
+    <a class="cta" href="prototypes/wfc_multitap.html" target="_blank" rel="noopener">Open prototype &#8599;</a>
+  </div>
+  <div class="launch" style="margin-top:12px">
+    <div class="lx"><b>Physarum FDN</b>
+      <p>A live slime-mold colony on a canvas &mdash; its trail density drives the feedback of an 8-tap delay network in real time.</p></div>
+    <a class="cta" href="prototypes/physarum_fdn.html" target="_blank" rel="noopener">Open prototype &#8599;</a>
+  </div>
 </section>
 
 <section>
@@ -155,6 +165,7 @@ const BEAT=()=>60/(+qbpm.value);
 const DIVS=[0.5,1,1.5,2,3];
 
 async function init(){
+  const u=new Audio(MARIMBA);u.volume=0;u.play().catch(()=>{}); // iOS: unmutes WebAudio from the ring/silent switch
   AC=new (window.AudioContext||window.webkitAudioContext)();
   buf=await AC.decodeAudioData(await (await fetch(MARIMBA)).arrayBuffer());
   inNode=AC.createGain(); dry=AC.createGain(); wet=AC.createGain();
