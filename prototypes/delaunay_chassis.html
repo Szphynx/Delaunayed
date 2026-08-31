@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Delaunay + Voronoi — chassis prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"/>
+<link rel="stylesheet" href="../ui/chassis.css"/>
+<style>
+  body{margin:0;padding:0 20px 56px;background:#0a0a0a;color:#eaeaea;
+       font:13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
+       background-image:linear-gradient(rgba(255,255,255,.014) 1px,transparent 1px),
+                        linear-gradient(90deg,rgba(255,255,255,.014) 1px,transparent 1px);
+       background-size:32px 32px}
+  .shell{max-width:1180px;margin:0 auto}
+  header{border-bottom:1px solid #252525;padding:34px 0 20px;margin-bottom:28px}
+  h1{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.045em;
+     text-transform:uppercase;font-size:clamp(1.9rem,5.5vw,3.2rem);line-height:.88;margin:0}
+  h1 em{font-style:normal;color:#ff2a2a}
+  .lede{font-family:Georgia,serif;font-style:italic;color:#a8a8a8;font-size:15px;
+        max-width:62ch;margin:12px 0 0}
+  .lede b{font-style:normal;font-family:inherit;font-weight:400;color:#eaeaea}
+  .bench{display:flex;gap:44px;flex-wrap:wrap;align-items:flex-start}
+  .mount{display:flex;flex-direction:column;gap:10px}
+  .spec{display:flex;align-items:baseline;gap:10px;font-size:10px;letter-spacing:.18em;
+        text-transform:uppercase;color:#6d6d6d}
+  .spec .n{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:18px;
+           letter-spacing:-.02em;color:#eaeaea;font-variant-numeric:tabular-nums}
+  .spec .rule{flex:1;height:1px;background:#333;min-width:16px}
+  .live{background:#1c1c1c;border:1px solid #333;padding:10px;width:660px}
+  .livehdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:9px;
+           letter-spacing:.16em;color:#6a6a6a;text-transform:uppercase}
+  .livehdr .dot{width:7px;height:7px;background:#d9c34a}
+  /* source strip — stands in for whatever feeds the device inside Live */
+  #src{border:1px solid #252525;background:#101010;padding:13px 15px;margin-top:26px}
+  #src.drag{border-color:#ff2a2a}
+  #src h2{margin:0 0 10px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+          color:#6d6d6d;font-weight:700}
+  #srcwave{width:100%;height:64px;background:#0c1018;border:1px solid #252525;display:block}
+  .srcbtns{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;font-size:11px}
+  .srcbtns button,.srcbtns label{background:transparent;border:1px solid #333;color:#6d6d6d;
+       font:700 10px/1 inherit;letter-spacing:.1em;text-transform:uppercase;padding:9px 13px;
+       cursor:pointer}
+  .srcbtns button:hover,.srcbtns label:hover{color:#eaeaea;border-color:#555}
+  .srcbtns button.on{background:#ff2a2a;color:#000;border-color:#ff2a2a}
+  .srcbtns button:focus-visible,.srcbtns label:focus-visible{outline:2px solid #5ad1c8;outline-offset:2px}
+  #srcname{color:#4a4a4a;letter-spacing:.06em;margin-left:auto;font-size:10px;text-transform:uppercase}
+  footer{margin-top:44px;padding-top:18px;border-top:1px solid #252525;font-size:10px;
+         letter-spacing:.14em;color:#4a4a4a;text-transform:uppercase}
+  footer a{color:#6d6d6d}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <h1>Delaunay<em>.</em> + Voronoi</h1>
+    <p class="lede">The working engine on the chassis. <b>DLY</b> crossfades three taps by
+      barycentric weight as you drag the playhead; <b>FRZ</b> switches hard on the Voronoi
+      cell under it and latches a loop. Real WebAudio — same geometry, same page spec, both
+      bodies at 1:1. Tap anywhere to start audio, then press ▶.</p>
+  </header>
+
+  <div class="bench">
+    <div class="mount">
+      <div class="spec"><span class="n">390 × 844</span><span class="rule"></span><span>Phone · portrait</span></div>
+      <div id="phone"></div>
+    </div>
+    <div class="mount">
+      <div class="spec"><span class="n">632 × 168</span><span class="rule"></span><span>Live device strip · 1:1</span></div>
+      <div class="live">
+        <div class="livehdr"><span class="dot"></span><span>Audio&nbsp;Track&nbsp;1 &nbsp;·&nbsp; MAX AUDIO FX</span></div>
+        <div id="rack"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="src">
+    <h2>Source — drop an audio file anywhere on this page</h2>
+    <canvas id="srcwave" width="1100" height="64"></canvas>
+    <div class="srcbtns">
+      <label>Load file<input type="file" id="file" accept="audio/*" hidden/></label>
+      <button id="mic">Audio in</button>
+      <button id="loop" class="on">Loop</button>
+      <span id="srcname">—</span>
+    </div>
+  </div>
+
+  <footer>Delaunayed · chassis in <a href="../ui/README.md">ui/</a> · geometry in <a href="../max/dlny.map.js">max/dlny.map.js</a></footer>
+</div>
+
+<script src="../ui/chassis.js"></script>
+<script src="../ui/effects/delaunay.js"></script>
+<script>
+/* ============================================================================
+   Audio for the Delaunay/Voronoi chassis spec.
+
+   The audio layer OBSERVES state; the UI layer MUTATES it. Nothing is wired
+   between them — sync() runs each frame and writes only what changed. That is
+   what lets ui/effects/delaunay.js stay audio-free and mountable on its own.
+   ========================================================================= */
+(function () {
+  'use strict';
+  var spec = DLNY.delaunay, S = spec.state, I = spec._internals;
+  var AC = null, voices = [], master = {}, srcNode = null, buffer = null,
+      micStream = null, freezeNode = null, playing = false,
+      last = {}, lastPts = null, srcStartedAt = 0, srcOffset = 0;
+  // 1/1 at 40bpm x2 is exactly 12s, so allocate a second of headroom rather
+  // than sitting on the ceiling. test_chassis asserts nothing exceeds 12.
+  var MAX_DELAY = 13;
+
+  /* ---------- graph ---------- */
+  function ensureAC() {
+    if (AC) return AC;
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master.live  = AC.createGain();                       // live source -> taps
+    master.taps  = AC.createGain();                       // taps bus -> voices
+    master.wet   = AC.createGain();                       // voices -> out
+    master.dry   = AC.createGain();
+    master.tone  = AC.createBiquadFilter(); master.tone.type = 'lowpass';
+    master.out   = AC.createGain();
+    master.limit = AC.createDynamicsCompressor();
+    master.limit.threshold.value = -6; master.limit.ratio.value = 12;
+    master.limit.attack.value = 0.003; master.limit.release.value = 0.15;
+    master.live.connect(master.taps);
+    master.wet.connect(master.tone); master.tone.connect(master.out);
+    master.dry.connect(master.out);
+    master.out.connect(master.limit); master.limit.connect(AC.destination);
+    buildVoices();
+    return AC;
+  }
+
+  function buildVoices() {
+    // Disconnect every node, not just the input: an orphaned feedback loop
+    // keeps itself alive and audible after the constellation is regenerated.
+    voices.forEach(function (v) {
+      killPitch(v);
+      [v.inGain, v.delay, v.filter, v.fb, v.gain, v.pan].forEach(function (n) {
+        try { n.disconnect(); } catch (e) {}
+      });
+    });
+    try { master.taps.disconnect(); } catch (e) {}
+    voices = [];
+    S.pts.forEach(function () {
+      var v = {};
+      v.inGain = AC.createGain();
+      v.delay  = AC.createDelay(MAX_DELAY);
+      v.filter = AC.createBiquadFilter(); v.filter.type = 'lowpass';
+      v.fb     = AC.createGain(); v.fb.gain.value = 0;
+      v.gain   = AC.createGain(); v.gain.gain.value = 0;
+      v.pan    = AC.createStereoPanner();
+      master.taps.connect(v.inGain);
+      v.inGain.connect(v.delay);
+      v.delay.connect(v.filter);
+      v.filter.connect(v.fb); v.fb.connect(v.delay);   // feedback loop
+      v.semi = 0;
+      v.filter.connect(v.gain);                        // pitch bypass at unity
+      v.gain.connect(v.pan);
+      v.pan.connect(master.wet);
+      v.div = -1; v.cut = -1; v.pan_ = 999; v.fbv = -1; v.w = -1;   // force first write
+      v.pitchNodes = null;
+      voices.push(v);
+    });
+    lastPts = S.pts;
+  }
+
+  /* ---------- per-tap pitch ----------
+     Two delay lines whose times ramp with a sawtooth, crossfaded by
+     complementary triangles so the gains always sum to 1. This is the standard
+     delay-line pitch shifter — the only kind that fits in plain WebAudio
+     without an AudioWorklet.
+
+     It sits AFTER the filter and OUTSIDE the feedback loop, so repeats hold
+     their pitch instead of walking away octave by octave. Move it inside the
+     loop if you want the runaway.
+
+     ponytail: window is fixed at 90ms and the two lines are phase-aligned only
+     at start, so large shifts warble. Good to about a fifth either way. If it
+     needs to be clean, that is an AudioWorklet, not a tuning change. */
+  var PITCH_WINDOW = 0.09;
+
+  function killPitch(v) {
+    if (!v.pitchNodes) return;
+    v.pitchNodes.forEach(function (n) {
+      try { if (n.stop) n.stop(); } catch (e) {}
+      try { n.disconnect(); } catch (e) {}
+    });
+    v.pitchNodes = null;
+  }
+
+  function setPitch(v, semi) {
+    killPitch(v);
+    try { v.filter.disconnect(); } catch (e) {}
+    v.filter.connect(v.fb);            // feedback survives either routing
+    v.semi = semi;
+
+    if (!semi) { v.filter.connect(v.gain); return; }
+
+    var r = Math.pow(2, semi / 12), W = PITCH_WINDOW;
+    var f = Math.abs(1 - r) / W, t0 = AC.currentTime, nodes = [];
+
+    var tri = AC.createOscillator(); tri.type = 'triangle'; tri.frequency.value = f;
+    var up = AC.createGain(); up.gain.value = 0.5;      // line A window
+    var dn = AC.createGain(); dn.gain.value = -0.5;     // line B window, inverted
+    tri.connect(up); tri.connect(dn);
+    nodes.push(tri, up, dn);
+
+    [up, dn].forEach(function (win, k) {
+      var d = AC.createDelay(0.5); d.delayTime.value = W / 2;
+      var saw = AC.createOscillator(); saw.type = 'sawtooth'; saw.frequency.value = f;
+      var depth = AC.createGain(); depth.gain.value = (r > 1 ? -1 : 1) * W / 2;
+      saw.connect(depth); depth.connect(d.delayTime);
+      var g = AC.createGain(); g.gain.value = 0.5;      // +/- 0.5 from the window
+      win.connect(g.gain);
+      v.filter.connect(d); d.connect(g); g.connect(v.gain);
+      saw.start(t0 + (k ? 0.5 / f : 0));                // half a window apart
+      nodes.push(d, saw, depth, g);
+    });
+    tri.start(t0);
+    v.pitchNodes = nodes;
+  }
+
+  /* ---------- source ---------- */
+  function startSource() {
+    stopSource();
+    if (!buffer) return;
+    srcNode = AC.createBufferSource();
+    srcNode.buffer = buffer;
+    srcNode.loop = document.getElementById('loop').classList.contains('on');
+    srcNode.connect(master.live); srcNode.connect(master.dry);
+    srcNode.start(0, srcOffset % buffer.duration);
+    srcStartedAt = AC.currentTime;
+  }
+  function stopSource() {
+    if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode.disconnect(); srcNode = null; }
+  }
+  function playPosition() {
+    if (!buffer) return 0;
+    return ((srcOffset + (AC.currentTime - srcStartedAt)) % buffer.duration);
+  }
+
+  /* ponytail: freeze loops a slice of the SOURCE, not the processed output.
+     That is a few lines instead of a capture graph, and it sounds right for a
+     buffer. It does nothing for the mic — capture into a ring buffer via an
+     AudioWorklet if live input ever needs to freeze. */
+  function startFreeze() {
+    stopFreeze();
+    if (!buffer) return;
+    var at = playPosition(), len = Math.max(0.04, S.flen / 1000);
+    freezeNode = AC.createBufferSource();
+    freezeNode.buffer = buffer;
+    freezeNode.loop = true;
+    freezeNode.loopStart = Math.min(at, Math.max(0, buffer.duration - len));
+    freezeNode.loopEnd = Math.min(buffer.duration, freezeNode.loopStart + len);
+    freezeNode.connect(master.taps);   // past master.live, which is muted while held
+    freezeNode.start(0, freezeNode.loopStart);
+  }
+  function stopFreeze() {
+    if (freezeNode) { try { freezeNode.stop(); } catch (e) {} freezeNode.disconnect(); freezeNode = null; }
+  }
+
+  /* ---------- per-frame diff: write only what moved ---------- */
+  function glide() { return Math.max(0.004, S.glide / 1000 / 3); }
+  function set(param, value) { param.setTargetAtTime(value, AC.currentTime, glide()); }
+
+  // In FRZ the Voronoi dual gates rather than crossfades: one cell, full gain.
+  function targetWeight(p, i) {
+    if (S.engine !== 'freeze') return I.weightOf(p);
+    var soloed = S.pts.some(function (q) { return q.solo; });
+    if (p.mute || (soloed && !p.solo)) return 0;
+    return i === nearestSite() ? p.vol / 100 : 0;
+  }
+  var nearestCache = { x: null, y: null, i: 0 };
+  function nearestSite() {
+    if (nearestCache.x === S.head.x && nearestCache.y === S.head.y) return nearestCache.i;
+    var bi = 0, bd = 1e18;
+    S.pts.forEach(function (p, i) {
+      var dx = p.x - S.head.x, dy = p.y - S.head.y, d = dx * dx + dy * dy;
+      if (d < bd) { bd = d; bi = i; }
+    });
+    nearestCache = { x: S.head.x, y: S.head.y, i: bi };
+    return bi;
+  }
+
+  function sync() {
+    if (!AC) return;
+    if (S.pts !== lastPts) buildVoices();
+
+    var mult = S.timeMult || 1, bypass = S.on === false;
+    var wantFreeze = playing && S.engine === 'freeze' && S.latch;
+
+    S.pts.forEach(function (p, i) {
+      var v = voices[i];
+      if (!v) return;
+      if (p.div !== v.div || S.bpm !== last.bpm || mult !== last.mult) {
+        set(v.delay.delayTime, Math.min(MAX_DELAY, I.divSec(p.div, S.bpm, mult)));
+        v.div = p.div;
+      }
+      if (p.cut !== v.cut) { set(v.filter.frequency, p.cut); v.cut = p.cut; }
+      if (p.pitch !== v.semi) setPitch(v, p.pitch);
+      var fbWant = Math.min(0.92, (p.fb / 100) * (S.fb / 100) * 1.6 +
+                                  (wantFreeze ? (S.ffb / 100) * 0.5 : 0));
+      if (Math.abs(fbWant - v.fbv) > 1e-4) {
+        // master Feedback trims every tap, so a runaway needs one control;
+        // Freeze F/B rings the held cells out on top of that
+        set(v.fb.gain, fbWant);
+        v.fbv = fbWant;
+      }
+      var wid = S.width / 100, pan = Math.max(-1, Math.min(1, (p.pan / 100) * wid));
+      if (pan !== v.pan_) { set(v.pan.pan, pan); v.pan_ = pan; }
+      var w = bypass ? 0 : targetWeight(p, i);
+      if (Math.abs(w - v.w) > 1e-4) { set(v.gain.gain, w); v.w = w; }
+    });
+
+    if (S.wet !== last.wet || bypass !== last.bypass) {
+      set(master.wet.gain, bypass ? 0 : S.wet / 100);
+      set(master.dry.gain, bypass ? 1 : 1 - S.wet / 100);
+    }
+    if (S.tone !== last.tone) {
+      // 0..100 % maps exponentially onto 300 Hz .. 18 kHz
+      set(master.tone.frequency, 300 * Math.pow(18000 / 300, S.tone / 100));
+    }
+    if (S.out !== last.out) set(master.out.gain, S.out / 100);
+
+    if (S.play !== playing) {
+      playing = S.play;
+      if (playing) { AC.resume(); startSource(); }
+      else { srcOffset = playPosition(); stopSource(); stopFreeze(); }
+    }
+    if (wantFreeze !== !!freezeNode) {
+      if (wantFreeze) startFreeze(); else stopFreeze();
+      set(master.live.gain, wantFreeze ? 0 : 1);
+    }
+
+    last.bpm = S.bpm; last.fb = S.fb; last.wet = S.wet; last.tone = S.tone;
+    last.out = S.out; last.bypass = bypass; last.mult = mult;
+  }
+
+  /* ---------- source loading ---------- */
+  var nameEl = document.getElementById('srcname');
+  function useBuffer(buf, label) {
+    buffer = buf; srcOffset = 0;
+    nameEl.textContent = label + ' · ' + buf.duration.toFixed(1) + 's';
+    drawWave(buf);
+    if (playing) startSource();
+  }
+
+  // A short pentatonic pluck, so the page has something to process with no
+  // network and no 700 KB of base64. Load a real file for anything serious.
+  function synthBuffer() {
+    var sr = AC.sampleRate, dur = 4, buf = AC.createBuffer(1, sr * dur, sr);
+    var d = buf.getChannelData(0), notes = [0, 3, 5, 7, 10, 12, 10, 7];
+    notes.forEach(function (semi, n) {
+      var f = 220 * Math.pow(2, semi / 12), start = Math.floor(n * 0.45 * sr);
+      for (var i = 0; i < sr * 0.7 && start + i < d.length; i++) {
+        var t = i / sr, env = Math.exp(-t * 6);
+        d[start + i] += env * 0.28 *
+          (Math.sin(2 * Math.PI * f * t) + 0.35 * Math.sin(2 * Math.PI * f * 4.1 * t) * Math.exp(-t * 14));
+      }
+    });
+    return buf;
+  }
+
+  function loadDefault() {
+    // Works over http(s); file:// blocks fetch, so fall through to the synth.
+    fetch('../assets/audio/00_dry_source.wav')
+      .then(function (r) { if (!r.ok) throw 0; return r.arrayBuffer(); })
+      .then(function (a) { return AC.decodeAudioData(a); })
+      .then(function (b) { useBuffer(b, 'marimba (repo asset)'); })
+      .catch(function () { useBuffer(synthBuffer(), 'built-in pluck'); });
+  }
+
+  function drawWave(buf) {
+    var cv = document.getElementById('srcwave'), g = cv.getContext('2d');
+    var d = buf.getChannelData(0), step = Math.floor(d.length / cv.width) || 1;
+    g.fillStyle = '#0c1018'; g.fillRect(0, 0, cv.width, cv.height);
+    g.strokeStyle = '#5ad1c8'; g.lineWidth = 1; g.beginPath();
+    for (var x = 0; x < cv.width; x++) {
+      var peak = 0;
+      for (var i = 0; i < step; i++) peak = Math.max(peak, Math.abs(d[x * step + i] || 0));
+      g.moveTo(x + .5, cv.height / 2 - peak * cv.height / 2);
+      g.lineTo(x + .5, cv.height / 2 + peak * cv.height / 2);
+    }
+    g.stroke();
+  }
+
+  /* ---------- page wiring ---------- */
+  document.getElementById('file').addEventListener('change', function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    ensureAC();
+    f.arrayBuffer().then(function (a) { return AC.decodeAudioData(a); })
+      .then(function (b) { useBuffer(b, f.name); });
+  });
+
+  document.getElementById('loop').addEventListener('click', function () {
+    this.classList.toggle('on');
+    if (srcNode) srcNode.loop = this.classList.contains('on');
+  });
+
+  document.getElementById('mic').addEventListener('click', function () {
+    var btn = this;
+    ensureAC();
+    if (micStream) {
+      micStream.getTracks().forEach(function (t) { t.stop(); });
+      micStream = null; btn.classList.remove('on'); nameEl.textContent = 'mic off';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false } })
+      .then(function (st) {
+        micStream = st;
+        var n = AC.createMediaStreamSource(st);
+        n.connect(master.live); n.connect(master.dry);
+        btn.classList.add('on');
+        nameEl.textContent = 'audio in · live (freeze needs a file)';
+      })
+      .catch(function () { nameEl.textContent = 'mic denied'; });
+  });
+
+  var srcBox = document.getElementById('src');
+  ['dragover', 'dragenter'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); srcBox.classList.add('drag'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); srcBox.classList.remove('drag'); });
+  });
+  document.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return;
+    ensureAC();
+    f.arrayBuffer().then(function (a) { return AC.decodeAudioData(a); })
+      .then(function (b) { useBuffer(b, f.name); });
+  });
+
+  // Browsers only allow an AudioContext to start inside a user gesture, and the
+  // chassis transport runs in one — but the context has to exist before that,
+  // so take the first pointer anywhere on the page.
+  document.addEventListener('pointerdown', function () {
+    ensureAC(); AC.resume(); loadDefault();
+  }, { once: true });
+
+  window.DLNY_AUDIO = { sync: sync };
+})();
+
+/* ---------- mount both bodies, one loop ---------- */
+var api = Chassis.mount(document.getElementById('phone'), DLNY.delaunay, 'phone');
+Chassis.mount(document.getElementById('rack'), DLNY.delaunay, 'rack');
+
+var t0 = performance.now();
+(function loop(t) {
+  var spec = DLNY.delaunay;
+  if (spec.tick(spec.state, (t - t0) / 1000)) api.paint();
+  DLNY_AUDIO.sync();
+  requestAnimationFrame(loop);
+})(t0);
+</script>
+</body>
+</html>

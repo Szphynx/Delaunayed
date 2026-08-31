@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>DLNY chassis — components</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"/>
+<link rel="stylesheet" href="chassis.css"/>
+<style>
+  /* Page chrome only — everything inside a .dlny mount is chassis.css. */
+  body{margin:0;padding:0 24px 64px;background:#0a0a0a;color:#eaeaea;
+       font:13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
+       background-image:linear-gradient(rgba(255,255,255,.014) 1px,transparent 1px),
+                        linear-gradient(90deg,rgba(255,255,255,.014) 1px,transparent 1px);
+       background-size:32px 32px}
+  .shell{max-width:1180px;margin:0 auto}
+  header{border-bottom:1px solid #252525;padding:40px 0 22px;margin-bottom:32px}
+  h1{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.045em;
+     text-transform:uppercase;font-size:clamp(2rem,6vw,3.6rem);line-height:.86;margin:0}
+  h1 em{font-style:normal;color:#ff2a2a}
+  .lede{font-family:Georgia,serif;font-style:italic;color:#a8a8a8;font-size:15px;
+        max-width:60ch;margin:14px 0 0}
+  .pick{display:flex;gap:8px;margin:22px 0 0;flex-wrap:wrap}
+  .pick button{background:transparent;border:1px solid #333;color:#6d6d6d;font:700 11px/1 inherit;
+               letter-spacing:.12em;text-transform:uppercase;padding:10px 16px;cursor:pointer}
+  .pick button:hover{color:#eaeaea;border-color:#555}
+  .pick button[aria-pressed="true"]{background:#ff2a2a;color:#000;border-color:#ff2a2a}
+  .pick button:focus-visible{outline:2px solid #5ad1c8;outline-offset:2px}
+  .bench{display:flex;gap:52px;flex-wrap:wrap;align-items:flex-start}
+  .mount{display:flex;flex-direction:column;gap:11px}
+  .spec{display:flex;align-items:baseline;gap:10px;font-size:10px;letter-spacing:.18em;
+        text-transform:uppercase;color:#6d6d6d}
+  .spec .n{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:19px;
+           letter-spacing:-.02em;color:#eaeaea;font-variant-numeric:tabular-nums}
+  .spec .rule{flex:1;height:1px;background:#333;min-width:20px}
+  .live{background:#1c1c1c;border:1px solid #333;padding:10px;width:660px}
+  .livehdr{display:flex;align-items:center;gap:8px;margin-bottom:8px;font-size:9px;
+           letter-spacing:.16em;color:#6a6a6a;text-transform:uppercase}
+  .livehdr .dot{width:7px;height:7px;background:#d9c34a}
+  footer{margin-top:56px;padding-top:20px;border-top:1px solid #252525;font-size:10px;
+         letter-spacing:.14em;color:#4a4a4a;text-transform:uppercase}
+  footer a{color:#6d6d6d}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <h1>DLNY<em>.</em> chassis</h1>
+    <p class="lede">One page spec, two device bodies. Pick an effect — both frames mount the
+      same spec and share its state, so a tab click or a slider move in one shows up in the
+      other. Adding a third effect is one file in <code>effects/</code>; see README.md.</p>
+    <div class="pick" id="pick"></div>
+  </header>
+
+  <div class="bench">
+    <div class="mount">
+      <div class="spec"><span class="n">390 × 844</span><span class="rule"></span><span>Phone · portrait</span></div>
+      <div id="phone"></div>
+    </div>
+    <div class="mount">
+      <div class="spec"><span class="n">632 × 168</span><span class="rule"></span><span>Live device strip · 1:1</span></div>
+      <div class="live">
+        <div class="livehdr"><span class="dot"></span><span>Audio&nbsp;Track&nbsp;1 &nbsp;·&nbsp; MAX AUDIO FX</span></div>
+        <div id="rack"></div>
+      </div>
+    </div>
+  </div>
+
+  <footer>Delaunayed · <a href="README.md">ui/README.md</a> · node ui/test_chassis.js</footer>
+</div>
+
+<script src="chassis.js"></script>
+<script src="effects/delaunay.js"></script>
+<script src="effects/wfc.js"></script>
+<script>
+/* ---- host page: mount an effect into both bodies, drive its tick ---- */
+var current = null, api = null, t0 = performance.now();
+
+function show(key) {
+  current = DLNY[key];
+  // Either api works — paint()/render() fan out to every mount of this spec.
+  api = Chassis.mount(document.getElementById('phone'), current, 'phone');
+  Chassis.mount(document.getElementById('rack'), current, 'rack');
+  buildPicker();
+}
+
+function buildPicker() {
+  var pick = document.getElementById('pick');
+  pick.textContent = '';
+  Object.keys(DLNY).forEach(function (key) {
+    var b = document.createElement('button');
+    b.textContent = DLNY[key].name;
+    b.setAttribute('aria-pressed', DLNY[key] === current);
+    b.onclick = function () { show(key); };
+    pick.appendChild(b);
+  });
+}
+
+/* One rAF for whichever spec is mounted. tick() returns true when it changed
+   something worth repainting; false keeps the loop cheap. */
+function loop(t) {
+  if (current && current.tick && current.tick(current.state, (t - t0) / 1000)) api.paint();
+  requestAnimationFrame(loop);
+}
+
+show('delaunay');
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

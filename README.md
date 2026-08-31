@@ -96,17 +96,42 @@ that approximates the sonic direction. **Dry reference:** [`assets/audio/00_dry_
 ![Physarum FDN](assets/img/05_physarum_fdn.svg)
 
 🔊 [`assets/audio/05_physarum_fdn.wav`](assets/audio/05_physarum_fdn.wav)
+&nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/physarum_fdn.html`](prototypes/physarum_fdn.html) — real agent sim, spectral seeding, and a full 8-node mesh whose live trail density *is* each edge's routing gain (write-up in the prototyping section below).
 
 - **Math:** Thousands of agents crawl a 2D field, deposit trails, steer toward stronger
   trails (the slime-mold sim that solves mazes and builds transport networks). Seed the field
   with the input's spectral energy.
 - **Sound:** The trail map *becomes the routing/feedback topology* of a **Feedback Delay
   Network**. The reverb/delay's internal structure self-organizes toward dominant
-  frequencies, then reconfigures as the input changes. (The demo uses a static Hadamard FDN
-  as a stand-in for the diffuse tail.)
+  frequencies, then reconfigures as the input changes. (The static-audio demo above uses a
+  fixed Hadamard FDN as a stand-in; the live prototype implements the real thing — no self-loops,
+  8 delay lines routed only through each other, gain set every frame by the trail between them.)
 - **Build:** Agents in `jit.gen` (GPU particle sim) → sample density map → set the FDN mixing
   matrix in `gen~`.
 - **Effort:** Medium–high.
+
+## 6 · Physarum Modulation Field — a spin-off, not #5 realized
+
+&nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/physarum_modulation_field.html`](prototypes/physarum_modulation_field.html) — a real, live Physarum sensor/steer agent sim.
+
+Built while prototyping #5 and kept as its own entry once it turned out to diverge from that
+spec in ways worth naming rather than quietly overwriting:
+
+- **What #5 asks for:** agents seeded by the input's spectral energy, whose trail *becomes the
+  FDN's routing topology* — the network rewires itself.
+- **What this actually is:** a free-running colony (not audio-seeded) whose trail density under
+  8 fixed points modulates each delay tap's *own* feedback amount. The routing between taps
+  stays constant; only how long each one rings out drifts. A live, chaotic **feedback
+  modulation source**, not a self-rewiring network.
+- **Why it's its own thing, not a shortlist duplicate:** every other agent/field-based idea here
+  either lives in the spectral domain (Reaction–Diffusion, Navier–Stokes advection) or freezes
+  into a static structure once built (Diffusion-limited aggregation). This is the only one that's
+  a continuously-live, audio-independent spatial process driving conventional FX parameters —
+  closer to "a colony as a very strange LFO" than a generative texture engine.
+- **#5 has since been built properly** (spectral-seeded field, live cross-tap routing gains, no
+  self-feedback) — see [`prototypes/physarum_fdn.html`](prototypes/physarum_fdn.html) above. This
+  entry stays because self-feedback-only modulation of a *fixed* network is a genuinely different,
+  simpler instrument from a self-*rewiring* one, not a worse draft of it.
 
 ---
 
