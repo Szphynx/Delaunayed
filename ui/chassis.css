@@ -16,6 +16,13 @@
   --disp:'Helvetica Neue',Helvetica,Arial,sans-serif;
   --ser:Georgia,'Times New Roman',serif;
   font-family:var(--mono); color:var(--ink);
+  /* This is a control surface, not a document: a long-press drives the `hold`
+     gesture (README's interaction contract), and on iOS a long-press with no
+     guard here fires the native copy/lookup callout and a text selection
+     instead — the exact "I selected something by mistake" failure mode. */
+  -webkit-user-select:none; user-select:none;
+  -webkit-touch-callout:none;
+  -webkit-tap-highlight-color:transparent;
 }
 .dlny *{box-sizing:border-box}
 
@@ -45,7 +52,11 @@
   font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dlny .ctl .v{font-variant-numeric:tabular-nums;color:var(--ink);text-align:right;font-size:11px}
 .dlny input[type=range]{-webkit-appearance:none;appearance:none;background:transparent;
-  margin:0;height:18px;cursor:pointer;min-width:0;--p:0%}
+  margin:0;height:18px;cursor:pointer;min-width:0;--p:0%;
+  /* Without this, a drag whose first pixels aren't perfectly horizontal reads
+     as a page-scroll gesture to the browser and steals the touch before the
+     slider ever sees it — the "sliders aren't draggable" complaint. */
+  touch-action:none}
 .dlny input[type=range]::-webkit-slider-runnable-track{height:2px;
   background:linear-gradient(90deg,var(--acc) var(--p),var(--line2) var(--p))}
 .dlny input[type=range]::-moz-range-track{height:2px;

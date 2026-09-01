@@ -7,11 +7,13 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"/>
 <link rel="stylesheet" href="../ui/chassis.css"/>
 <style>
+  html,body{overflow-x:hidden}   /* the phone is scaled to fit width in JS; this is only a backstop */
   body{margin:0;padding:0 16px 56px;background:#0a0a0a;color:#eaeaea;
        font:13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
        background-image:linear-gradient(rgba(255,255,255,.014) 1px,transparent 1px),
                         linear-gradient(90deg,rgba(255,255,255,.014) 1px,transparent 1px);
-       background-size:32px 32px}
+       background-size:32px 32px;
+       -webkit-tap-highlight-color:transparent}
   .shell{max-width:430px;margin:0 auto}
   header{border-bottom:1px solid #252525;padding:30px 0 18px;margin-bottom:22px}
   h1{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.045em;
@@ -24,7 +26,15 @@
   .spec .n{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:17px;
            letter-spacing:-.02em;color:#eaeaea;font-variant-numeric:tabular-nums}
   .spec .rule{flex:1;height:1px;background:#333;min-width:14px}
-  .mount{display:flex;justify-content:center}
+  /* #phone is scaled in JS to fit the real viewport (real phones run from
+     ~360 to ~430 CSS px wide, and plenty are shorter than 844 once browser
+     chrome is subtracted) — the 390x844 body is a fixed mockup size, not a
+     layout that reflows on its own. transform-origin stays top-center so it
+     shrinks toward the header instead of drifting off-center. .mount's own
+     height is set in JS too, to match the scaled box — otherwise transform
+     leaves the original 844px of empty layout space behind it. */
+  .mount{display:flex;justify-content:center;overflow:hidden}
+  #phone{transform-origin:top center}
   /* source strip — stands in for whatever feeds the device inside Live */
   #src{border:1px solid #252525;background:#101010;padding:12px 14px;margin-top:26px}
   #src.drag{border-color:#ff2a2a}
@@ -55,7 +65,7 @@
   </header>
 
   <div class="spec"><span class="n">390 × 844</span><span class="rule"></span><span>Phone · portrait</span></div>
-  <div class="mount" id="phone"></div>
+  <div class="mount"><div id="phone"></div></div>
 
   <div id="src">
     <h2>Source — drop an audio file anywhere on this page</h2>
@@ -524,6 +534,33 @@
 
 /* ---------- mount the phone body only, one loop ---------- */
 var api = Chassis.mount(document.getElementById('phone'), DLNY.wfc, 'phone');
+
+/* ---------- scale the fixed 390x844 body to fit the real viewport ----------
+   Chassis.mount() sets host.className = 'dlny phone', which is how the box
+   gets its literal 390x844 size — that's a mockup size, not something that
+   reflows. Plenty of real phones are narrower (as low as ~360 CSS px) or
+   shorter (once browser chrome eats into innerHeight) than that, so without
+   this the device chrome — or the tab strip, or the readout — runs past the
+   edge of the screen. transform: scale() shrinks it losslessly; pointer
+   coordinates stay correct because chassis.js reads the canvas's rendered
+   getBoundingClientRect(), which already reflects the transform. */
+function fitPhone() {
+  var phone = document.getElementById('phone'), mount = phone.parentElement;
+  var pad = 24, vw = window.innerWidth, vh = window.innerHeight;
+  // Reset before measuring: the header above .mount doesn't reflow with the
+  // phone's own scale, but resetting first keeps this robust even if it ever
+  // does, instead of the previous scale feeding into the next measurement.
+  phone.style.transform = 'scale(1)'; mount.style.height = '844px';
+  var top = mount.getBoundingClientRect().top;
+  var availH = vh - top - 16;
+  var scale = Math.min(1, (vw - pad) / 390, availH / 844);
+  scale = Math.max(0.35, scale);   // stay legible rather than shrink to nothing on a short landscape view
+  phone.style.transform = 'scale(' + scale.toFixed(4) + ')';
+  mount.style.height = Math.ceil(844 * scale) + 'px';
+}
+window.addEventListener('resize', fitPhone);
+window.addEventListener('orientationchange', fitPhone);
+fitPhone();
 
 var t0 = performance.now();
 (function loop(t) {
