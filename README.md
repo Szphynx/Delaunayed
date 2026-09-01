@@ -136,12 +136,44 @@ spec in ways worth naming rather than quietly overwriting:
 
 ---
 
+## 6 · L-system Branching Delay Tree — echoes that inherit from their parent
+
+![L-system branching delay tree](assets/img/06_lsystem.svg)
+
+🔊 [`06_lsystem_a_baseline.wav`](assets/audio/06_lsystem_a_baseline.wav)
+&nbsp;·&nbsp; [`b_scale_off`](assets/audio/06_lsystem_b_scale_off.wav)
+&nbsp;·&nbsp; [`c_just`](assets/audio/06_lsystem_c_just.wav)
+&nbsp;·&nbsp; [`d_ratio_high`](assets/audio/06_lsystem_d_ratio_high.wav)
+&nbsp;·&nbsp; [`e_branch3`](assets/audio/06_lsystem_e_branch3.wav)
+&nbsp;·&nbsp; [`f_long_decay`](assets/audio/06_lsystem_f_long_decay.wav)
+&nbsp;·&nbsp; [`g_growth`](assets/audio/06_lsystem_g_growth.wav)
+&nbsp;·&nbsp; [`z_flat_control`](assets/audio/06_lsystem_z_flat_control.wav)
+&nbsp;·&nbsp; sketch: [`prototypes/lsystem_tree_delay.py`](prototypes/lsystem_tree_delay.py)
+
+- **Math:** The turtle interpretation of the L-system *is* the delay graph. A segment is a
+  delay node (time, gain, pitch, pan, darkening); a child node reads its **parent's output**,
+  so delay times **compound geometrically** (`Σ L·r^n`) instead of being listed linearly.
+  `+`/`-` turns become pitch ratios, depth becomes `g^n` gain and cumulative lowpass — the
+  tree prunes itself when a branch's accumulated gain falls below -60 dB, so cost is bounded
+  without a depth knob.
+- **Sound:** One input explodes into a cloud where every sub-branch is a scaled copy of the
+  whole tail — self-similar, not a flat tap list. Rewriting the rule while audio runs makes
+  the tail sprout finer detail one generation at a time (`g_growth`).
+- **Scale control:** don't quantize the *angle*, quantize the *ratio*. `heading·cents_per_deg`
+  → snap to 12-TET (tonal, echoes arpeggiate up the branches), to just ratios (branches beat
+  pure against each other), or not at all (microtonal drift, further off-grid with depth).
+  One array swap between the three worlds.
+- **Control demo:** `z_flat_control` is the same node count with linear times and no
+  inheritance — a plain multitap. It's the A/B that justifies the architecture.
+- **Effort:** Low. Node list is control-rate; `poly~` of delay voices renders it.
+
+---
+
 ## Shortlist — other unmined veins
 
 | Idea | Math | Sonic character |
 |---|---|---|
 | **Optimal transport spectral morph** | Wasserstein / earth-mover | one spectrum physically *flows* into another (not a crossfade) |
-| **L-systems** | recursive grammars | fractal, self-similar branching echo trees |
 | **Percolation theory** | critical-threshold connectivity | effect suddenly *ignites* into runaway texture at a phase transition |
 | **Persistent homology (TDA)** | topological shape of the feature cloud | birth/death of features triggers events (deep end) |
 | **Navier–Stokes advection** | fluid velocity field | spectral energy swirls / flows like current |
