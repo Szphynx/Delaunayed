@@ -106,6 +106,8 @@
   var AC = null, voices = [], master = {}, srcNode = null, buffer = null,
       micStream = null, freezeNode = null, playing = false,
       last = {}, lastPts = null, srcStartedAt = 0, srcOffset = 0;
+  var ringNode = null, ringReady = null, capId = 0, capResolvers = {},
+      freezing = false, freezeGen = 0;
   // 1/1 at 40bpm x2 is exactly 12s, so allocate a second of headroom rather
   // than sitting on the ceiling. test_chassis asserts nothing exceeds 12.
   var MAX_DELAY = 13;
@@ -128,7 +130,32 @@
     master.dry.connect(master.out);
     master.out.connect(master.limit); master.limit.connect(AC.destination);
     buildVoices();
+    ensureRing();
     return AC;
+  }
+
+  /* ---------- ring capture for freeze: tapped on master.wet (the processed
+     bus), not the dry source, so freeze grabs whatever is actually coming
+     through the delay voices right now — a file loop or a live mic alike. */
+  function ensureRing() {
+    if (ringReady) return ringReady;
+    ringReady = AC.audioWorklet.addModule('../ui/ring-capture-worklet.js').then(function () {
+      ringNode = new AudioWorkletNode(AC, 'ring-capture');
+      ringNode.port.onmessage = function (e) {
+        var d = e.data;
+        if (d.type === 'captured' && capResolvers[d.id]) { capResolvers[d.id](d.samples); delete capResolvers[d.id]; }
+      };
+      var sink = AC.createGain(); sink.gain.value = 0;   // keeps the node pulled without being audible twice
+      master.wet.connect(ringNode); ringNode.connect(sink); sink.connect(AC.destination);
+    }).catch(function () { ringReady = null; });   // no AudioWorklet support: freeze just stays inert
+    return ringReady;
+  }
+  function captureMs(ms) {
+    return new Promise(function (resolve) {
+      if (!ringNode) { resolve(null); return; }
+      var id = ++capId; capResolvers[id] = resolve;
+      ringNode.port.postMessage({ type: 'capture', ms: ms, id: id });
+    });
   }
 
   function buildVoices() {
@@ -240,23 +267,29 @@
     return ((srcOffset + (AC.currentTime - srcStartedAt)) % buffer.duration);
   }
 
-  /* ponytail: freeze loops a slice of the SOURCE, not the processed output.
-     That is a few lines instead of a capture graph, and it sounds right for a
-     buffer. It does nothing for the mic — capture into a ring buffer via an
-     AudioWorklet if live input ever needs to freeze. */
+  /* Freeze grabs the last S.flen ms off the ring capture on master.wet — the
+     processed/delayed signal, not the dry source — and loops it back into
+     master.taps in place of master.live (muted while held). Works the same
+     for a file loop or a live mic, since the ring doesn't care what fed it. */
   function startFreeze() {
+    if (freezing) return;
     stopFreeze();
-    if (!buffer) return;
-    var at = playPosition(), len = Math.max(0.04, S.flen / 1000);
-    freezeNode = AC.createBufferSource();
-    freezeNode.buffer = buffer;
-    freezeNode.loop = true;
-    freezeNode.loopStart = Math.min(at, Math.max(0, buffer.duration - len));
-    freezeNode.loopEnd = Math.min(buffer.duration, freezeNode.loopStart + len);
-    freezeNode.connect(master.taps);   // past master.live, which is muted while held
-    freezeNode.start(0, freezeNode.loopStart);
+    freezing = true;
+    var myGen = ++freezeGen;
+    captureMs(S.flen).then(function (samples) {
+      if (myGen !== freezeGen || !samples) return;   // released, or worklet not ready yet
+      var buf = AC.createBuffer(1, samples.length, AC.sampleRate);
+      buf.copyToChannel(samples, 0);
+      freezeNode = AC.createBufferSource();
+      freezeNode.buffer = buf;
+      freezeNode.loop = true;
+      freezeNode.connect(master.taps);
+      freezeNode.start(0);
+    });
   }
   function stopFreeze() {
+    freezing = false;
+    freezeGen++;   // invalidate any capture still in flight
     if (freezeNode) { try { freezeNode.stop(); } catch (e) {} freezeNode.disconnect(); freezeNode = null; }
   }
 
@@ -328,7 +361,10 @@
       if (playing) { AC.resume(); startSource(); }
       else { srcOffset = playPosition(); stopSource(); stopFreeze(); }
     }
-    if (wantFreeze !== !!freezeNode) {
+    if (wantFreeze !== freezing) {
+      // freezing, not !!freezeNode: the capture round-trip to the worklet is
+      // async, so freezeNode doesn't exist yet on the frame freeze engages —
+      // keying off it here would re-fire startFreeze() every frame until it does.
       if (wantFreeze) startFreeze(); else stopFreeze();
       set(master.live.gain, wantFreeze ? 0 : 1);
     }

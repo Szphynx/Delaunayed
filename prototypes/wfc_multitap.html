@@ -722,7 +722,12 @@ function captureGrain(ms){
   return buf;
 }
 function shapeEnv(g,T,t,len,base){
-  const eps=0.0006;g.cancelScheduledValues(t);g.setValueAtTime(0.0001,t);
+  // Gate engine reuses one persistent gain per lane; a new note can land
+  // while the last is still decaying. Hold the interpolated value at t
+  // instead of hard-jumping to 0.0001 — that jump is an audible click.
+  const eps=0.0006;
+  if(g.cancelAndHoldAtTime)g.cancelAndHoldAtTime(t);else{g.cancelScheduledValues(t);g.setValueAtTime(g.value,t);}
+  g.linearRampToValueAtTime(0.0001,t+0.003);
   if(T.envc==='rise'){g.linearRampToValueAtTime(base,t+len*0.72);g.linearRampToValueAtTime(0.0001,t+len);}
   else if(T.envc==='sus'){g.linearRampToValueAtTime(base,t+Math.min(0.03,len*0.14));g.setValueAtTime(base,t+len*0.7);g.linearRampToValueAtTime(0.0001,t+len);}
   else if(T.envc==='fall'){g.linearRampToValueAtTime(base,t+0.006);g.exponentialRampToValueAtTime(Math.max(eps,base*0.02),t+len);g.linearRampToValueAtTime(0.0001,t+len+0.004);}

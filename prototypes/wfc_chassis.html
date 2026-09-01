@@ -281,7 +281,15 @@
   }
   function shapeEnv(g, T, t, len, base) {
     var eps = 0.0006;
-    g.cancelScheduledValues(t); g.setValueAtTime(0.0001, t);
+    // On a fresh grain gain this is a no-op (nothing scheduled, already
+    // 0.0001). On the gate engine's persistent per-lane gain, a new note can
+    // land while the last one is still mid-decay (sustain/junction run
+    // longer than a 16th-note step) — hard-jumping to 0.0001 there is an
+    // audible click. Hold the actual interpolated value at t, then ramp down,
+    // instead of overwriting it discontinuously.
+    if (g.cancelAndHoldAtTime) g.cancelAndHoldAtTime(t);
+    else { g.cancelScheduledValues(t); g.setValueAtTime(g.value, t); }
+    g.linearRampToValueAtTime(0.0001, t + 0.003);
     if (T.envc === 'rise') {
       g.linearRampToValueAtTime(base, t + len * 0.72); g.linearRampToValueAtTime(0.0001, t + len);
     } else if (T.envc === 'sus') {
