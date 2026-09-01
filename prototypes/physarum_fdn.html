@@ -214,14 +214,52 @@ function render(){
 }
 
 /* ================= audio: the numpy FDN, with the colony setting the matrix ================= */
-const UNLOCK_WAV='data:audio/wav;base64,UklGRiUAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQEAAACA';
+/* ---------- mobile audio session ----------------------------------------
+   iOS parks WebAudio on the ringer channel — silent-switch muted, and on many
+   devices no output at all — and only moves it to the playback channel while
+   an HTMLMediaElement is genuinely playing. It falls straight back when that
+   element stops, so a one-shot unlock blip buys nothing. getUserMedia flips
+   the same switch, which is why granting the mic was the only way to hear
+   this page. Hence a *silent looping* element, kept alive for as long as the
+   page wants audio. Silent by content, not by volume: iOS ignores .volume on
+   media elements, so unlocking with the demo sample plays it out loud with
+   nothing left holding a reference to stop it.
+   Canonical copy, with the full notes: ui/audio-session.js — inlined here
+   because this prototype is meant to work as a single saved file. */
+const AudioSession=(()=>{
+  let el=null;const ctxs=[];
+  const silentWav=sec=>{                     // 8-bit 8 kHz mono, every sample at the zero level
+    const n=Math.round(8000*sec),b=new Uint8Array(44+n),d=new DataView(b.buffer);
+    const tag=(o,t)=>{for(let i=0;i<t.length;i++)b[o+i]=t.charCodeAt(i);};
+    tag(0,'RIFF');d.setUint32(4,36+n,true);tag(8,'WAVEfmt ');d.setUint32(16,16,true);
+    d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,8000,true);
+    d.setUint32(28,8000,true);d.setUint16(32,1,true);d.setUint16(34,8,true);
+    tag(36,'data');d.setUint32(40,n,true);b.fill(128,44);
+    let str='';for(let i=0;i<b.length;i++)str+=String.fromCharCode(b[i]);
+    return 'data:audio/wav;base64,'+btoa(str);
+  };
+  const keep=()=>{if(el&&el.paused){const p=el.play();if(p&&p.catch)p.catch(()=>{});}};
+  const resume=()=>ctxs.forEach(c=>{if(c.state!=='running'){const p=c.resume();if(p&&p.catch)p.catch(()=>{});}});
+  // A call, the lock screen or a tab switch suspends both; returning is the moment to re-arm.
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&el){keep();resume();}});
+  return {
+    unlock(){                                // call synchronously, before any await
+      if(!el){el=document.createElement('audio');el.src=silentWav(0.5);el.loop=true;
+        el.setAttribute('playsinline','');el.addEventListener('pause',keep);}  // iOS pauses it after an interruption
+      keep();resume();
+    },
+    attach(ac){if(ctxs.indexOf(ac)<0)ctxs.push(ac);resume();return ac;},
+    decode(ctx,ab){                          // Safari before 14.1 only has the callback form
+      return new Promise((res,rej)=>{const p=ctx.decodeAudioData(ab,res,rej);if(p&&p.then)p.then(res,rej);});
+    }
+  };
+})();
 let AC,buffer,pluckBuf,pluckTimer,srcNode,playing=false,bypassed=false;
 let inputGain,dryGain,wetGain,tone,master,limiter,analyser,freqData,bands,taps=[],mix=[],frame=0;
 
 async function initAudio(){
   if(AC)return;
-  const u=new Audio(UNLOCK_WAV);u.volume=0;u.play().catch(()=>{}); // iOS: unmutes WebAudio from the ring/silent switch
-  AC=new (window.AudioContext||window.webkitAudioContext)();
+  AC=AudioSession.attach(new (window.AudioContext||window.webkitAudioContext)());
   master=AC.createGain();master.connect(AC.destination);
   limiter=AC.createDynamicsCompressor();limiter.threshold.value=-6;limiter.knee.value=6;limiter.ratio.value=14;
   limiter.attack.value=0.003;limiter.release.value=0.15;limiter.connect(master);
@@ -332,6 +370,7 @@ toneEl.addEventListener('input',()=>{const hz=+toneEl.value;$('tonev').textConte
 
 $('reseed').addEventListener('click',reseedAll);
 playBtn.addEventListener('click',async()=>{
+  AudioSession.unlock();                       // must run before the first await
   if(!AC){await initAudio();}
   if(AC.state==='suspended')await AC.resume();
   if(!playing){ startSource(); playing=true; playBtn.textContent='■ Stop'; playBtn.classList.add('on'); }
@@ -344,8 +383,9 @@ $('power').addEventListener('click',function(){bypassed=!bypassed;this.classList
 ['dragleave','drop'].forEach(ev=>cv.addEventListener(ev,e=>{e.preventDefault();cv.classList.remove('drop');}));
 cv.addEventListener('drop',async e=>{
   const f=e.dataTransfer.files[0]; if(!f)return;
+  AudioSession.unlock();
   if(!AC){await initAudio();}
-  try{ buffer=await AC.decodeAudioData(await f.arrayBuffer()); $('srcname').textContent='source: '+f.name;
+  try{ buffer=await AudioSession.decode(AC,await f.arrayBuffer()); $('srcname').textContent='source: '+f.name;
     if(playing){ if(pluckTimer){clearInterval(pluckTimer);pluckTimer=null;} restartSource(); } }
   catch(err){ $('srcname').textContent='decode failed: '+f.name; }
 });
