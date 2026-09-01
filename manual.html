@@ -3,17 +3,17 @@
 <title>Delaunay - Manuals</title>
 <link rel="stylesheet" href="manual.css">
 <style>
- .devs{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin:0 0 14px}
- .dev{border:1px solid var(--line);background:var(--panel);padding:15px 16px;display:flex;flex-direction:column}
+ .devs{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin:0 0 16px}
+ .dev{border:1px solid var(--line);background:var(--panel);padding:20px 20px 18px;display:flex;flex-direction:column}
  .dev .t{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;text-transform:uppercase;
-   letter-spacing:-.015em;font-size:17px;margin-bottom:3px}
+   letter-spacing:-.02em;font-size:26px;line-height:1;margin-bottom:5px}
  .dev .t a{color:var(--ink);text-decoration:none}
  .dev .t a:hover{color:var(--acc)}
- .dev .s{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
- .dev p{font-size:12.5px;color:#9a9a9a;margin:0 0 12px;flex:1}
- .dev .go{display:flex;gap:8px;flex-wrap:wrap}
- .dev .go a{font-size:11px;letter-spacing:.06em;text-transform:uppercase;font-weight:700;text-decoration:none;
-   padding:7px 11px;border:1px solid #3a3a3a;color:var(--ink)}
+ .dev .s{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut);margin-bottom:12px}
+ .dev p{font-size:13.5px;color:#b0b0b0;margin:0 0 14px;flex:1;max-width:none}
+ .dev .go{display:flex;gap:9px;flex-wrap:wrap}
+ .dev .go a{font-size:11px;letter-spacing:.07em;text-transform:uppercase;font-weight:700;text-decoration:none;
+   padding:9px 14px;border:1px solid #3a3a3a;color:var(--ink)}
  .dev .go a:hover{border-color:var(--acc);color:var(--acc)}
  .dev .go a.p{background:var(--ink);color:#000;border-color:var(--ink)}
  .dev .go a.p:hover{background:var(--acc);border-color:var(--acc);color:#000}
@@ -23,90 +23,42 @@
 
 <div class="wrap" id="masthead">
   <h1>Manuals<span>.</span></h1>
-  <div class="tagline">One manual per device &mdash; what it is, how to drive it, what every control does,
-    and a few settings worth starting from.</div>
+  <div class="tagline">Two instruments, built on the same idea: let some structure decide what
+    the delay does, and perform the structure instead of the knobs.</div>
   <div class="index">
     <a href="index.html">&larr;&nbsp;Index</a>
-    <a href="#devices">Devices</a>
-    <a href="#start">Getting&nbsp;started</a>
-    <a href="#fx">Insert&nbsp;FX</a>
+    <a href="manual-delaunay.html">Delaunay</a>
+    <a href="manual-collapse.html">Collapse</a>
+    <a href="#start">Getting started</a>
   </div>
 </div>
 
-<section id="devices">
-  <h2>Pick a device</h2>
+<section>
+  <h2>The instruments</h2>
   <div class="devs">
 
     <div class="dev">
-      <div class="t"><a href="manual-delaunay-delay.html">Delaunay Delay</a></div>
-      <div class="s">Full device &middot; delay + freeze</div>
-      <p>Delay taps triangulated across a plane, blended by where a playhead sits. The Voronoi
-        dual gives hard-edged cells you can freeze, latch and stack. Per-tap FX and presets.</p>
-      <div class="go"><a class="p" href="manual-delaunay-delay.html">Manual</a>
-        <a href="prototypes/delaunay_delay.html" target="_blank" rel="noopener">Open device &#8599;</a></div>
+      <div class="t"><a href="manual-delaunay.html">Delaunay</a></div>
+      <div class="s">Navigable delay &middot; freeze</div>
+      <p>Delay taps scattered across a plane, each with its own time, pitch, tone and feedback.
+        A playhead blends the three taps around it, so moving through the field morphs the
+        delay instead of switching it. Hold anywhere and it freezes what it is playing.</p>
+      <div class="go">
+        <a class="p" href="manual-delaunay.html">Read the manual</a>
+        <a href="prototypes/delaunay_delay.html" target="_blank" rel="noopener">Open &#8599;</a>
+      </div>
     </div>
 
     <div class="dev">
-      <div class="t"><a href="manual-delaunay-chassis.html">Delaunay</a></div>
-      <div class="s">Chassis &middot; phone + rack</div>
-      <p>The same constellation on the device chassis: six pages, a drag-anywhere playhead, and
-        hold-to-freeze on the canvas.</p>
-      <div class="go"><a class="p" href="manual-delaunay-chassis.html">Manual</a>
-        <a href="prototypes/delaunay_chassis.html" target="_blank" rel="noopener">Open device &#8599;</a></div>
-    </div>
-
-    <div class="dev">
-      <div class="t"><a href="manual-wfc-multitap.html">WFC Multitap</a></div>
-      <div class="s">Full device &middot; learns rules</div>
-      <p>The real constraint solver. Paint an example, teach it the adjacency rules from that
-        grid or from your audio, then collapse endless variations in the same style.</p>
-      <div class="go"><a class="p" href="manual-wfc-multitap.html">Manual</a>
-        <a href="prototypes/wfc_multitap.html" target="_blank" rel="noopener">Open device &#8599;</a></div>
-    </div>
-
-    <div class="dev">
-      <div class="t"><a href="manual-collapse-chassis.html">Collapse</a></div>
-      <div class="s">Chassis &middot; phone</div>
-      <p>A grid of steps and lanes you paint with six envelope tiles, played by either a grain
-        engine or a gated multitap delay.</p>
-      <div class="go"><a class="p" href="manual-collapse-chassis.html">Manual</a>
-        <a href="prototypes/wfc_chassis.html" target="_blank" rel="noopener">Open device &#8599;</a></div>
-    </div>
-
-    <div class="dev">
-      <div class="t"><a href="manual-wfc-3d-live.html">Collapse 3D</a></div>
-      <div class="s">Chassis &middot; 3D view</div>
-      <p>Collapse with its grid lifted into a rotatable stack of cubes, running the same audio
-        engine underneath.</p>
-      <div class="go"><a class="p" href="manual-wfc-3d-live.html">Manual</a>
-        <a href="prototypes/wfc_3d_live.html" target="_blank" rel="noopener">Open device &#8599;</a></div>
-    </div>
-
-    <div class="dev">
-      <div class="t"><a href="manual-wfc-3d-view.html">WFC 3D</a></div>
-      <div class="s">Visualizer</div>
-      <p>A standalone view of the collapse itself &mdash; watch a pattern resolve in three
-        dimensions and roll parts of it without replacing the whole thing.</p>
-      <div class="go"><a class="p" href="manual-wfc-3d-view.html">Manual</a>
-        <a href="prototypes/wfc_3d_view.html" target="_blank" rel="noopener">Open visualizer &#8599;</a></div>
-    </div>
-
-    <div class="dev">
-      <div class="t"><a href="manual-physarum-fdn.html">Physarum FDN</a></div>
-      <div class="s">Full device &middot; grown reverb</div>
-      <p>A slime-mold colony seeded by your input&rsquo;s spectrum. The trails it grows between
-        eight delay nodes become the reverb&rsquo;s routing.</p>
-      <div class="go"><a class="p" href="manual-physarum-fdn.html">Manual</a>
-        <a href="prototypes/physarum_fdn.html" target="_blank" rel="noopener">Open device &#8599;</a></div>
-    </div>
-
-    <div class="dev">
-      <div class="t"><a href="manual-physarum-field.html">Modulation Field</a></div>
-      <div class="s">Full device &middot; modulated delay</div>
-      <p>The same colony on a simpler job: trail density under each of eight fixed taps sets how
-        much that tap repeats.</p>
-      <div class="go"><a class="p" href="manual-physarum-field.html">Manual</a>
-        <a href="prototypes/physarum_modulation_field.html" target="_blank" rel="noopener">Open device &#8599;</a></div>
+      <div class="t"><a href="manual-collapse.html">Collapse</a></div>
+      <div class="s">Generative rhythm grid</div>
+      <p>A grid of steps and lanes you paint with six envelope shapes, played by either a grain
+        engine or a gated delay. It can fill the grid for you under rules it already knows &mdash;
+        or learn the rules from a pattern you painted, or from a loop you loaded.</p>
+      <div class="go">
+        <a class="p" href="manual-collapse.html">Read the manual</a>
+        <a href="prototypes/wfc_multitap.html" target="_blank" rel="noopener">Open &#8599;</a>
+      </div>
     </div>
 
   </div>
@@ -114,37 +66,22 @@
 
 <section id="start">
   <h2>Getting started</h2>
-  <p class="lede">Every device processes audio you give it &mdash; none of them make sound on
-    their own. Feed one a loop or your microphone, then press play.</p>
+  <p class="lede">Both instruments process audio you give them. Neither makes sound on its own,
+    so the first job is always feeding one.</p>
   <ol class="steps">
-    <li><b>Tap anywhere once.</b> Browsers only let audio start inside a real interaction, so the
-      first tap wakes the engine and loads the built-in loop.</li>
-    <li><b>Choose a source.</b> <b>Load file</b> takes WAV, AIFF, MP3 or M4A &mdash; you can also
-      drag a file straight onto the page. <b>Audio in</b> uses your microphone instead.
-      <b>Loop</b> repeats the loaded file rather than playing it once.</li>
-    <li><b>Press &#9654;.</b> The source starts and the device begins processing it.</li>
-    <li><b>Set the mix.</b> <b>Dry/Wet</b> decides how much processed sound you hear. The dry
-      signal always passes underneath, so at 0% you hear the source untouched.</li>
+    <li><b>Tap the page once.</b> Browsers only allow audio to start inside a real interaction.
+      The first tap wakes the engine and loads a short built-in loop so there is something to
+      hear immediately.</li>
+    <li><b>Load your own material.</b> <b>Load file</b> accepts WAV, AIFF, MP3 and M4A, and you can
+      drop a file anywhere on the page. <b>Audio in</b> takes a microphone or interface instead.
+      <b>Loop</b> repeats a file rather than playing it once through.</li>
+    <li><b>Press &#9654;</b> and set <b>Dry/Wet</b>. The dry signal always passes underneath, so
+      this is a balance between source and effect rather than a fade to silence.</li>
+    <li><b>Use the canvas.</b> On both instruments the canvas is where the playing happens; the
+      pages underneath are for setting up what the canvas will do.</li>
   </ol>
-  <p>On the chassis devices, the canvas is the instrument and everything else lives on tabbed
-    pages under it. The power square at the top left bypasses the device; the dice in the
-    transport re-rolls every parameter, and the knob beside it sets how far a roll may throw.</p>
-</section>
-
-<section id="fx">
-  <h2>Insert FX</h2>
-  <p>Delaunay and Collapse both let you drop one effect onto a single tap or lane rather than the
-    whole mix. Each has one knob.</p>
-  <div class="tblwrap">
-    <table>
-      <thead><tr><th>Effect</th><th>Knob</th><th>Sound</th></tr></thead>
-      <tbody>
-        <tr><td class="k">Phaser</td><td class="r">Rate</td><td>Sweeping, hollow movement. Slow rates breathe; fast rates wobble.</td></tr>
-        <tr><td class="k">Ring Mod</td><td class="r">Freq</td><td>Metallic and bell-like. Low frequencies growl, high ones turn pitched material into clangs.</td></tr>
-        <tr><td class="k">Grain</td><td class="r">Size</td><td>A short smeared echo that thickens the voice. Small sizes shimmer, larger ones blur.</td></tr>
-      </tbody>
-    </table>
-  </div>
+  <p>Both run in a browser with no install. Headphones are worth it &mdash; feedback and freeze
+    build up quickly, and the stereo field is where a lot of the detail sits.</p>
 </section>
 
 <footer>

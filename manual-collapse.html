@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Collapse - Manual</title>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<div class="wrap" id="masthead">
+  <h1>Collapse<span>.</span></h1>
+  <div class="tagline">A rhythm grid that fills itself in. Paint a few bars the way you want them,
+    and it writes endless variations that still sound like you.</div>
+  <div class="index">
+    <a href="manual.html">&larr;&nbsp;Manuals</a>
+    <a href="prototypes/wfc_multitap.html" target="_blank" rel="noopener">Open&nbsp;&#8599;</a>
+    <a href="#idea">The idea</a>
+    <a href="#start">Start here</a>
+    <a href="#tiles">The tiles</a>
+    <a href="#engines">Grain &amp; Gate</a>
+    <a href="#rules">Teaching it</a>
+    <a href="#controls">Controls</a>
+    <a href="#sounds">Sounds to try</a>
+  </div>
+</div>
+
+<section id="idea">
+  <h2>The idea</h2>
+  <p class="lede">Wave Function Collapse is a pattern solver: give it rules about which things
+    may sit next to which, and it fills a grid so every neighbour is legal. Here the grid is a
+    rhythm and the things are ways of shaping your audio.</p>
+  <p>The canvas is <b>steps</b> across time and <b>lanes</b> of audio stacked up the side. A
+    playhead sweeps the steps in tempo. Wherever it meets a coloured cell, that lane fires.</p>
+  <p>You can paint every cell by hand like a step sequencer. The interesting part is that you
+    don&rsquo;t have to: hit <b>Collapse</b> and the solver fills the grid for you &mdash; not at
+    random, but obeying rules about which shapes may follow which. The result is a pattern you
+    didn&rsquo;t write that still holds together, and you can throw another one every time the
+    current groove wears out.</p>
+  <p>And the rules aren&rsquo;t fixed. Paint two bars of something you like, tell it to learn from
+    that, and every pattern it generates afterwards belongs to the same family.</p>
+</section>
+
+<section id="start">
+  <h2>Start here</h2>
+  <ol class="steps">
+    <li><b>Tap the page once.</b> Browsers only allow audio to start inside a real interaction.
+      The first tap wakes the engine and loads a short built-in loop.</li>
+    <li><b>Give it your own audio.</b> <b>Load file</b> accepts WAV, AIFF, MP3 and M4A, and you
+      can drop a file anywhere on the page. <b>Audio in</b> takes your microphone or interface.
+      <b>Loop</b> repeats the file rather than playing it once.</li>
+    <li><b>Press &#9654;.</b> The playhead starts sweeping and whatever is on the grid fires.</li>
+    <li><b>Paint some cells.</b> Drag across the grid to lay down a rhythm; hold on a cell to
+      erase it.</li>
+    <li><b>Press Collapse</b> when you want the machine&rsquo;s version instead of yours.</li>
+  </ol>
+  <p class="note">Start on the Grain engine with the built-in loop &mdash; it responds to painting
+    most obviously, so you hear what each tile does straight away.</p>
+</section>
+
+<section id="tiles">
+  <h2>The tiles</h2>
+  <p>A cell is not an instrument or a sample slot. It is an <b>envelope</b> &mdash; the shape of
+    that one hit, how loud it is, and how much of it spills into the echo. Six of them, and the
+    difference between them is what gives a pattern its feel.</p>
+  <div class="tiles">
+    <div class="tile">
+      <div class="h"><span class="chip" style="background:#151a24;border:1px solid #3a3a3a"></span><span class="n">Rest</span></div>
+      <svg viewBox="0 0 120 30" aria-hidden="true"><line x1="4" y1="25" x2="116" y2="25" stroke="#777"/></svg>
+      <p>Silence. The playhead passes without firing that lane. Space matters as much as hits &mdash; a grid with no rests is mud.</p>
+    </div>
+    <div class="tile">
+      <div class="h"><span class="chip" style="background:#5ad1c8"></span><span class="n">Rise</span></div>
+      <svg viewBox="0 0 120 30" aria-hidden="true"><polyline points="4,26 78,5 116,26" fill="none" stroke="#5ad1c8" stroke-width="1.8"/></svg>
+      <p>Swells in, then drops. Reads as reverse-tape or a pad breathing in. Longer than most tiles, so it leans into the next step.</p>
+    </div>
+    <div class="tile">
+      <div class="h"><span class="chip" style="background:#f2a65a"></span><span class="n">Sustain</span></div>
+      <svg viewBox="0 0 120 30" aria-hidden="true"><polyline points="4,26 20,6 96,6 116,26" fill="none" stroke="#f2a65a" stroke-width="1.8"/></svg>
+      <p>Quick in, holds, releases. The longest tile &mdash; it overlaps whatever comes next, which blurs the grid into something more legato.</p>
+    </div>
+    <div class="tile">
+      <div class="h"><span class="chip" style="background:#c86bfa"></span><span class="n">Fall</span></div>
+      <svg viewBox="0 0 120 30" aria-hidden="true"><polyline points="4,6 12,6 116,24" fill="none" stroke="#c86bfa" stroke-width="1.8"/></svg>
+      <p>Instant attack, fast decay. The tightest, most percussive tile &mdash; this is the one that gives a pattern its groove.</p>
+    </div>
+    <div class="tile">
+      <div class="h"><span class="chip" style="background:#ff2a2a"></span><span class="n">Accent</span></div>
+      <svg viewBox="0 0 120 30" aria-hidden="true"><polyline points="4,6 10,6 108,22 116,25" fill="none" stroke="#ff2a2a" stroke-width="2"/></svg>
+      <p>Fall&rsquo;s shape at roughly double the volume, and it pushes hardest into the echo. Use it sparingly, on the beats you want felt.</p>
+    </div>
+    <div class="tile">
+      <div class="h"><span class="chip" style="background:#4af626"></span><span class="n">FB Junction</span></div>
+      <svg viewBox="0 0 120 30" aria-hidden="true"><polyline points="4,26 20,6 96,6 116,26" fill="none" stroke="#4af626" stroke-width="1.8"/></svg>
+      <p>Shaped like Sustain, but almost everything it makes goes into the echo rather than straight out. This is the tile that grows tails &mdash; a couple of these turn a dry pattern into a ringing one.</p>
+    </div>
+  </div>
+</section>
+
+<section id="engines">
+  <h2>Grain &amp; Gate</h2>
+  <p>Same grid, two different machines underneath it. This is the biggest single change you can
+    make to how a pattern sounds, and you can switch while it plays.</p>
+
+  <figure>
+    <svg viewBox="0 0 900 240" role="img" aria-label="Grain captures short snippets of the incoming audio and plays each one with the tile's envelope. Gate keeps a delay running per lane and opens a gate for the tile's envelope. Both pass through the lane's tone and effect into the output mix, with feedback returning to the lanes.">
+      <defs>
+        <marker id="m1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="'JetBrains Mono',monospace" font-size="11.5" fill="currentColor">
+        <text x="10" y="20" font-size="10.5" opacity=".6">YOUR AUDIO</text>
+        <rect x="10" y="30" width="104" height="150" fill="none" stroke="currentColor" opacity=".45"/>
+        <text x="62" y="100" text-anchor="middle" font-size="10.5" opacity=".75">file loop</text>
+        <text x="62" y="118" text-anchor="middle" font-size="10.5" opacity=".75">or live in</text>
+
+        <line x1="114" y1="70" x2="150" y2="70" stroke="#5ad1c8" marker-end="url(#m1)"/>
+        <line x1="114" y1="150" x2="150" y2="150" stroke="#f2a65a" marker-end="url(#m1)"/>
+
+        <rect x="152" y="36" width="196" height="70" fill="none" stroke="#5ad1c8"/>
+        <text x="250" y="60" text-anchor="middle" fill="#5ad1c8" font-weight="700" font-size="11.5">GRAIN</text>
+        <text x="250" y="79" text-anchor="middle" font-size="10.5" opacity=".8">grabs a short snippet as it</text>
+        <text x="250" y="94" text-anchor="middle" font-size="10.5" opacity=".8">plays, fires one per cell</text>
+
+        <rect x="152" y="116" width="196" height="70" fill="none" stroke="#f2a65a"/>
+        <text x="250" y="140" text-anchor="middle" fill="#f2a65a" font-weight="700" font-size="11.5">GATE</text>
+        <text x="250" y="159" text-anchor="middle" font-size="10.5" opacity=".8">a delay runs non-stop; the</text>
+        <text x="250" y="174" text-anchor="middle" font-size="10.5" opacity=".8">cell opens a gate on it</text>
+
+        <line x1="348" y1="71" x2="404" y2="95" stroke="#5ad1c8" opacity=".75"/>
+        <line x1="348" y1="151" x2="404" y2="127" stroke="#f2a65a" opacity=".75"/>
+
+        <rect x="406" y="82" width="170" height="58" fill="none" stroke="currentColor" opacity=".5"/>
+        <text x="491" y="106" text-anchor="middle" font-weight="700" font-size="11.5">THE LANE</text>
+        <text x="491" y="124" text-anchor="middle" font-size="10.5" opacity=".7">tone, level, one effect</text>
+
+        <line x1="576" y1="111" x2="614" y2="111" stroke="currentColor" marker-end="url(#m1)"/>
+        <rect x="616" y="72" width="150" height="78" fill="none" stroke="#ff2a2a"/>
+        <text x="691" y="98" text-anchor="middle" fill="#ff2a2a" font-weight="700" font-size="11.5">OUT</text>
+        <text x="691" y="117" text-anchor="middle" font-size="10.5" opacity=".75">Dry/Wet, Tone,</text>
+        <text x="691" y="132" text-anchor="middle" font-size="10.5" opacity=".75">Output</text>
+
+        <path d="M691 150 V206 H250 V190" fill="none" stroke="#ff2a2a" opacity=".55" stroke-dasharray="3 3" marker-end="url(#m1)"/>
+        <text x="470" y="222" text-anchor="middle" fill="#ff2a2a" opacity=".8" font-size="10.5">Feedback returns some of the wet sound to the lanes &mdash; this is how tails build</text>
+      </g>
+    </svg>
+    <figcaption><b>Grain</b> chops your audio into short pieces and rebuilds a rhythm out of them.
+      Percussive, granular, closest to a sampler &mdash; and because every hit is independent, it
+      stays clean however dense the grid gets. <b>Gate</b> leaves a delay running underneath and
+      rhythmically opens and shuts it. Smoother and more connected, like a gated echo, with the
+      tails of one hit bleeding into the next.</figcaption>
+  </figure>
+
+  <p><b>Lanes have a fixed character.</b> Lower lanes sit darker and further left in the stereo
+    field, higher lanes brighter and further right. You choose where a sound sits by choosing
+    which lane you paint on.</p>
+</section>
+
+<section id="rules">
+  <h2>Teaching it</h2>
+  <p>On the full panel, the solver&rsquo;s rules can come from three places. This is what separates
+    Collapse from a step sequencer that randomises.</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Mode</th><th>Learns from</th><th>What you get</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Hand rules</td><td class="r">built in</td>
+          <td>The default musical rule set. Good patterns out of the box, in a general-purpose way.</td></tr>
+        <tr><td class="k">Learn from grid</td><td class="r">what you painted</td>
+          <td>Reads every neighbouring pair in the current grid and allows only the pairs it saw. Paint two bars of your own groove, learn from it, then collapse repeatedly &mdash; every result is new but unmistakably in that style.</td></tr>
+        <tr><td class="k">Learn from audio</td><td class="r">the loaded file</td>
+          <td>Slices your audio into steps, measures how loud each slice is and whether it is rising or falling, and maps that onto tiles. The rhythm of your sample becomes the rule set.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>The workflow that pays off: paint a short phrase deliberately, learn from it, then keep
+    pressing Collapse and keep the ones you like. You are not randomising &mdash; you are asking
+    for more of what you just made.</p>
+</section>
+
+<section id="controls">
+  <h2>Controls</h2>
+  <p>Collapse comes in two bodies: a full desktop panel and a compact device layout with tabbed
+    pages. The controls below are on both; a few extras exist only on the full panel and are
+    marked.</p>
+
+  <h3>On the grid</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Gesture</th><th>Touch</th><th>Mouse</th><th>What happens</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Tap a cell</td><td class="r">tap</td><td class="r">click</td>
+          <td>Paints the current brush tile there, and selects that lane.</td></tr>
+        <tr><td class="k">Drag</td><td class="r">drag</td><td class="r">drag</td>
+          <td>Paints a run of cells in one stroke &mdash; the fast way to lay down a line.</td></tr>
+        <tr><td class="k">Hold a cell</td><td class="r">press 0.4s</td><td class="r">right-click</td>
+          <td>Erases it back to silence.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Transport</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">&#9654;</td><td class="r">&mdash;</td><td>Starts and stops the sequencer and the source.</td></tr>
+        <tr><td class="k">Grain / Gate</td><td class="r">two engines</td><td>Granular hits, or a gated delay. Switch while playing.</td></tr>
+        <tr><td class="k">Collapse</td><td class="r">&mdash;</td><td>Solves a whole new pattern under the current rules, and animates it filling in.</td></tr>
+        <tr><td class="k">Re-seed</td><td class="r">&mdash;</td><td>Throws a fresh starting point and new lane levels.</td></tr>
+        <tr><td class="k">&frac12;&times; / 1&times; / 2&times; <span style="color:#8a8a8a">(full panel)</span></td><td class="r">three settings</td><td>Halves or doubles the delay times underneath the pattern.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Pattern</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Tempo</td><td class="r">40&ndash;220&nbsp;BPM</td><td>Playhead speed. The one control that actually sets how fast the pattern runs.</td></tr>
+        <tr><td class="k">Steps</td><td class="r">8&ndash;32</td><td>How many steps long the pattern is. Odd lengths against a straight track are worth trying.</td></tr>
+        <tr><td class="k">Lanes</td><td class="r">3&ndash;8</td><td>How many voices stack up the side. More lanes means a denser, wider result.</td></tr>
+        <tr><td class="k">Step</td><td class="r">1/16 &ndash; 1/1</td><td>Note division behind the Gate engine &mdash; it sets how long each gate stays open and how the delays underneath are spaced.</td></tr>
+        <tr><td class="k">Brush</td><td class="r">six tiles</td><td>Which tile your taps paint.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Sound</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Dry/Wet</td><td class="r">0&ndash;100%</td><td>How much of the pattern sits over the source. The dry signal always passes underneath.</td></tr>
+        <tr><td class="k">Feedback</td><td class="r">0&ndash;90%</td><td>How much each hit feeds the echo bus. Low keeps hits separate; high blurs the grid into a wash. On the Gate engine it also thickens each lane&rsquo;s own delay, so it bites harder there.</td></tr>
+        <tr><td class="k">Grain</td><td class="r">40&ndash;600&nbsp;ms</td><td>Length of each captured snippet on the Grain engine. Under 100&nbsp;ms is gritty and stuttering; past 300&nbsp;ms the pieces get long enough to carry pitch and melody.</td></tr>
+        <tr><td class="k">Glide</td><td class="r">0&ndash;800&nbsp;ms</td><td>How quickly the instrument reacts when you move a control. Long settings smear parameter changes into the sound instead of stepping to them.</td></tr>
+        <tr><td class="k">Width <span style="color:#8a8a8a">(full panel)</span></td><td class="r">0&ndash;150%</td><td>Stereo spread across the lanes.</td></tr>
+        <tr><td class="k">Output</td><td class="r">0&ndash;150%</td><td>Master level after the limiter.</td></tr>
+        <tr><td class="k">Tone</td><td class="r">300&nbsp;Hz&ndash;18&nbsp;kHz</td><td>Lowpass over the processed signal.</td></tr>
+        <tr><td class="k">Level / Mute / Solo</td><td class="r">per lane</td><td>A channel strip per lane, with a live meter. Muting lanes while a pattern runs is a performance move in itself.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Effects on a lane</h3>
+  <p>One effect can be inserted on a single lane rather than the whole mix, so one voice in the
+    pattern is treated and the rest stay clean. Each has a single knob.</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Effect</th><th>Knob</th><th>Sound</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Phaser</td><td class="r">Rate</td><td>Hollow sweeping movement. Slow rates breathe; fast rates wobble.</td></tr>
+        <tr><td class="k">Ring Mod</td><td class="r">Freq</td><td>Metallic and inharmonic. Low frequencies growl, high ones turn pitched material into bells.</td></tr>
+        <tr><td class="k">Grain</td><td class="r">Size</td><td>A short smeared echo inside the lane. Small sizes shimmer, larger ones blur it into a cloud.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="sounds">
+  <h2>Sounds to try</h2>
+  <div class="recipe">
+    <b>Chopped breakbeat</b>
+    <p><em>Grain</em>, Grain length 60&ndash;90&nbsp;ms, Feedback low. Load a break, then paint
+      mostly Fall with Accent on the downbeats and plenty of Rest between. Raise Tempo for finer
+      chatter, or press Collapse to have it rewrite the fill.</p>
+  </div>
+  <div class="recipe">
+    <b>Ambient wash from a single note</b>
+    <p><em>Grain</em>, Grain length past 400&nbsp;ms, Sustain and Rise filling most of the grid,
+      Feedback high, Tone rolled back, Dry/Wet near 100%. Feed it a held note or a pad and it
+      stops sounding rhythmic entirely.</p>
+  </div>
+  <div class="recipe">
+    <b>Gated echo groove</b>
+    <p><em>Gate</em>, Step at 1/8, a sparse pattern of Fall tiles, Feedback around 55%. Then mute
+      and unmute lanes on the level page while it runs &mdash; that is the arrangement.</p>
+  </div>
+  <div class="recipe">
+    <b>Tail that never ends</b>
+    <p>Paint two or three <em>FB Junction</em> tiles, push Feedback past 60% and pull Dry/Wet
+      down. The tails feed themselves, so the pattern keeps ringing after you stop the source.</p>
+  </div>
+  <div class="recipe">
+    <b>More of your own groove</b>
+    <p>Paint two bars by hand until it feels right. Switch to <em>Learn from grid</em>, then press
+      Collapse repeatedly and keep the versions that surprise you. Same feel, patterns you would
+      not have written.</p>
+  </div>
+  <div class="recipe">
+    <b>Let the sample write the part</b>
+    <p>Load a loop with a strong rhythm, press <em>Learn from audio</em>, then Collapse. The grid
+      follows the accents and swells of the file, so the pattern locks to material you never
+      programmed.</p>
+  </div>
+</section>
+
+<footer>
+  <span>Collapse - a rhythm grid that fills itself in.</span>
+  <span><a href="manual.html">Manuals</a> &middot; <a href="index.html">Index</a></span>
+</footer>
+
+</body></html>
