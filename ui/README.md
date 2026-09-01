@@ -13,6 +13,7 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 | `chassis.css` | All device chrome, both bodies. Scoped under `.dlny`, dark-only. |
 | `chassis.js` | `Chassis.mount(host, spec, 'phone'\|'rack')` + the reusable page bodies. |
 | `randomize.js` | `Randomize.mount()` — the dice button and its amount knob, plus the model behind them. The chassis mounts it into the transport itself; the four single-file prototypes inline a copy that rolls their `<input type=range>` sliders instead. Keep the copies in sync. |
+| `rhodes.js` | `Rhodes.create(AC)` — a two-operator FM electric piano, so an effect can be played with notes instead of a sample. `node ui/test_rhodes.js`. |
 | `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS, and decodes AIFF/AIFC, which only Safari takes natively. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
 | `effects/delaunay.js` | Engine A of `prototypes/delaunay_delay.html`, as a spec. |
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
@@ -246,6 +247,12 @@ them and the rest is the patch.
   in flight and what has just fired at time t". The animation draws from it, and the
   engine can call the same function to know which voices are sounding. That's why the
   timing lives there and not in the render loop. `node ui/test_tree_travel.js` covers it.
+- **`ponytail:`** `rhodes.js` is two oscillators, two gains and a lowpass per note — a carrier
+  at the note and a modulator 14× above it whose depth dies in ~120 ms, which is the tine.
+  Velocity drives the modulation index, not just level, so digging in gets *brighter*. No
+  samples, no wavetable, no library. It is not a Suitcase (no pickup asymmetry, no tremolo,
+  no key-off thunk) but it plays in tune and sounds like the right instrument through a delay,
+  which is all it is for.
 - **`ponytail:`** The chassis hands `draw` a canvas it does not clear, so `TreeTravel.paint`
   paints its own ground. Without that a swaying tree smears across every frame — a spec
   that draws a still picture never notices.
