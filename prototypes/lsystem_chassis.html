@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Tree — L-system delay, chassis prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"/>
+<link rel="stylesheet" href="../ui/chassis.css"/>
+<style>
+  body{margin:0;padding:0 16px 56px;background:#061420;color:#dfeef6;
+       font:13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
+       background-image:linear-gradient(rgba(95,192,228,.05) 1px,transparent 1px),
+                        linear-gradient(90deg,rgba(95,192,228,.05) 1px,transparent 1px);
+       background-size:32px 32px;-webkit-tap-highlight-color:transparent}
+  .shell{max-width:1060px;margin:0 auto}
+  /* chassis.css is dark-only with one accent; this device wears the tree's
+     blue instead of the house red. Tokens only — no chrome is restyled. */
+  .dlny{--acc:#5fc0e4;--c1:#4fd6c4;--c2:#9fd8ea;--well:#08192a;--line:#14304a;--line2:#1b4160}
+  header{border-bottom:1px solid #1b4160;padding:30px 0 18px;margin-bottom:22px}
+  h1{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.045em;
+     text-transform:uppercase;font-size:clamp(1.7rem,7vw,2.4rem);line-height:.9;margin:0}
+  h1 em{font-style:normal;color:#5fc0e4}
+  .lede{font-family:Georgia,serif;font-style:italic;color:#7fa3b8;font-size:14px;margin:12px 0 0;max-width:62ch}
+  .lede b{font-style:normal;font-family:inherit;font-weight:400;color:#dfeef6}
+  .bodies{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
+  .cap{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#4f7d95;margin:0 0 9px}
+  #src{border:1px solid #1b4160;background:#0d2233;padding:12px 14px;margin-top:26px}
+  #src button,#src select,#src input[type=file]{font:inherit;font-size:11px;background:#08192a;
+    color:#dfeef6;border:1px solid #2c6c8c;padding:5px 9px;border-radius:2px;cursor:pointer}
+  #src button:hover,#src select:hover{border-color:#5fc0e4;color:#5fc0e4}
+  #src .line{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  #src p{color:#7fa3b8;font-size:11px;margin:9px 0 0}
+  /* keyboard — two octaves, in-key notes lit so you can hear the lock working */
+  #keys{display:flex;position:relative;height:74px;margin-top:12px;user-select:none;touch-action:none}
+  
+  #keys .w{flex:1;background:#c9dde8;border:1px solid #0d2a40;border-top:none;border-radius:0 0 3px 3px;
+           position:relative;cursor:pointer}
+  #keys .w.inkey{background:#8fd4ea}
+  #keys .w.down{background:#5fc0e4}
+  #keys .b{position:absolute;top:0;width:52%;height:62%;background:#0a1f30;border:1px solid #06131e;
+           border-top:none;border-radius:0 0 3px 3px;transform:translateX(74%);z-index:2;cursor:pointer}
+  #keys .b.inkey{background:#1d5b7c;border-color:#2c6c8c}
+  #keys .b.down{background:#4fd6c4}
+  #keys .lbl{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:8px;color:#3c6f8c}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <h1>Branching <em>delay tree</em></h1>
+    <p class="lede">One voice per node — <b>delay, tone, pitch, pan</b> — each reading its
+      <b>parent's</b> output, so the graph is the tree and the delay times compound. A wind field bends the
+      tips more than the trunk; heading is pitch, so the tree retunes in key as it moves.
+      <b>Drag the tree</b> to put your hand on it.</p>
+  </header>
+
+  <div class="bodies">
+    <div>
+      <p class="cap">Live device · 632 × 168</p>
+      <div id="rack"></div>
+      <div id="src">
+        <div class="line">
+          <button id="play">Play</button>
+          <button id="loop">Loop: on</button>
+          <select id="pick">
+            <option value="../assets/audio/07_tonal_dry_Am.wav">A minor drone</option>
+            <option value="../assets/audio/00_dry_source.wav">Marimba</option>
+            <option value="../assets/audio/amen_break_138bpm.wav">Amen break</option>
+          </select>
+          <input type="file" id="file" accept="audio/*"/>
+          <button id="latch">Latch: off</button>
+        </div>
+        <div id="keys"></div>
+        <p id="hint">Play the keys (or your computer's <code>a w s e d f t g y h u j k</code> row) to feed
+          the tree notes instead of a sample. Lit keys are in the device's current scale. Serve the folder
+          for the built-in sources (<code>npx http-server</code>), or drop a file in.</p>
+      </div>
+    </div>
+    <div>
+      <p class="cap">Phone · 390 × 844</p>
+      <div id="phone"></div>
+    </div>
+  </div>
+</div>
+
+<script src="../ui/randomize.js"></script>
+<script src="../ui/chassis.js"></script>
+<script src="../ui/lsystem.js"></script>
+<script src="../ui/rhodes.js"></script>
+<script src="../ui/tree-travel.js"></script>
+<script src="../ui/effects/lsystem.js"></script>
+<script>
+/* ---------------------------------------------------------------------------
+   The engine observes the spec's state each frame and writes only what changed
+   — the same pattern as prototypes/delaunay_chassis.html, so the spec still
+   mounts standalone in ui/index.html with no audio attached.
+
+   One voice per node: delay -> lowpass -> pitch -> gain -> pan, each reading
+   its PARENT's tap. The graph is the tree; nothing keeps a tap list.
+
+   ponytail: no feedback path. The tree is finite and prunes itself at -60 dB,
+   so there is nothing to run away, and it saves a knob nobody asked for.
+   --------------------------------------------------------------------------- */
+'use strict';
+var DLNY_AUDIO = (function () {
+  var S = DLNY.lsystem.state;
+  var AC = null, master = null, voices = [], buffer = null, srcNode = null, shape = '';
+
+  function ensureAC() {
+    if (AC) return;
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    master = { in: AC.createGain(), dry: AC.createGain(), wet: AC.createGain(),
+               tone: AC.createBiquadFilter(), out: AC.createGain() };
+    master.tone.type = 'lowpass';
+    master.dry.connect(master.out);
+    master.wet.connect(master.tone); master.tone.connect(master.out);
+    master.out.connect(AC.destination);
+  }
+
+  /* Two delay lines ramped by a sawtooth, crossfaded by complementary
+     triangles: the standard delay-line shifter, the only kind that fits plain
+     WebAudio. Same one as delaunay_chassis.html.
+     ponytail: 90 ms window, phase-aligned only at start, so large shifts
+     warble. Good to about a fifth either way; clean means an AudioWorklet. */
+  var PITCH_WINDOW = 0.09;
+  function killPitch(v) {
+    if (!v.pitch) return;
+    v.pitch.forEach(function (n) {
+      try { if (n.stop) n.stop(); } catch (e) {}
+      try { n.disconnect(); } catch (e) {}
+    });
+    v.pitch = null;
+  }
+  function setPitch(v, semi) {
+    if (v.semi === semi) return;              // the key snap makes this rare
+    killPitch(v);
+    try { v.lp.disconnect(); } catch (e) {}
+    v.semi = semi;
+    v.lp.connect(v.tap);                      // children read the unshifted line
+    if (!semi) { v.lp.connect(v.gain); return; }
+    var r = Math.pow(2, semi / 12), W = PITCH_WINDOW;
+    var f = Math.abs(1 - r) / W, t = AC.currentTime, made = [];
+    var tri = AC.createOscillator(); tri.type = 'triangle'; tri.frequency.value = f;
+    var up = AC.createGain(); up.gain.value = 0.5;
+    var dn = AC.createGain(); dn.gain.value = -0.5;
+    tri.connect(up); tri.connect(dn); made.push(tri, up, dn);
+    [up, dn].forEach(function (win, k) {
+      var d = AC.createDelay(0.5); d.delayTime.value = W / 2;
+      var saw = AC.createOscillator(); saw.type = 'sawtooth'; saw.frequency.value = f;
+      var depth = AC.createGain(); depth.gain.value = (r > 1 ? -1 : 1) * W / 2;
+      saw.connect(depth); depth.connect(d.delayTime);
+      var g = AC.createGain(); g.gain.value = 0.5;
+      win.connect(g.gain);
+      v.lp.connect(d); d.connect(g); g.connect(v.gain);
+      saw.start(t + (k ? 0.5 / f : 0));
+      made.push(d, saw, depth, g);
+    });
+    tri.start(t);
+    v.pitch = made;
+  }
+
+  function build(nodes) {
+    voices.forEach(function (v) {
+      killPitch(v);
+      [v.in, v.delay, v.lp, v.tap, v.gain, v.pan].forEach(function (n) {
+        try { n.disconnect(); } catch (e) {}
+      });
+    });
+    voices = nodes.map(function (n) {
+      var v = { n: n, semi: null, pitch: null };
+      v.in = AC.createGain();
+      v.delay = AC.createDelay(6);
+      v.lp = AC.createBiquadFilter(); v.lp.type = 'lowpass';
+      v.lp.frequency.value = Math.max(400, 14000 * Math.pow(0.72, n.depth));
+      v.tap = AC.createGain();
+      v.gain = AC.createGain(); v.gain.gain.value = n.gain;
+      v.pan = AC.createStereoPanner();
+      v.in.connect(v.delay); v.delay.connect(v.lp);
+      v.gain.connect(v.pan); v.pan.connect(master.wet);
+      return v;
+    });
+    voices.forEach(function (v, i) {
+      var src = nodes[i].parent >= 0 ? voices[nodes[i].parent].tap : master.in;
+      src.connect(v.in);
+      setPitch(v, nodes[i].semi);
+    });
+  }
+
+  // Called once a frame. Rebuilds only when the tree's shape changed; otherwise
+  // it just writes the values the wind moved.
+  function sync() {
+    if (!AC || !S.nodes.length) return;
+    var sig = S.branch + '/' + S.maxDepth + '/' + S.nodes.length;
+    if (sig !== shape) { shape = sig; build(S.nodes); }
+    var now = AC.currentTime, w = S.spread / 100;
+    S.nodes.forEach(function (n, i) {
+      var v = voices[i];
+      if (!v) return;
+      v.delay.delayTime.setTargetAtTime(
+        Math.max(0.001, n.t - (n.parent >= 0 ? S.nodes[n.parent].t : 0)), now, 0.08);
+      v.pan.pan.setTargetAtTime(n.pan * w, now, 0.08);
+      v.gain.gain.setTargetAtTime(n.gain, now, 0.05);
+      setPitch(v, n.semi);
+    });
+    master.dry.gain.value = S.on ? S.dry / 100 : 1;
+    master.wet.gain.value = S.on ? S.wet / 100 : 0;
+    master.tone.frequency.value = S.tone;
+    if (S.play && !srcNode) start();
+    if (!S.play && srcNode) stop();
+  }
+
+  function start() {
+    if (!buffer) { S.play = false; return; }
+    stop();
+    srcNode = AC.createBufferSource();
+    srcNode.buffer = buffer;
+    srcNode.loop = document.getElementById('loop').textContent.indexOf('on') > 0;
+    srcNode.connect(master.in); srcNode.connect(master.dry);
+    srcNode.onended = function () { srcNode = null; S.play = false; };
+    srcNode.start();
+  }
+  function stop() {
+    if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode.disconnect(); srcNode = null; }
+  }
+
+  function say(t) { document.getElementById('hint').textContent = t; }
+  function loadURL(url) {
+    ensureAC();
+    return fetch(url).then(function (r) { return r.arrayBuffer(); })
+      .then(function (b) { return AC.decodeAudioData(b); })
+      .then(function (buf) { buffer = buf; say('Loaded ' + url.split('/').pop() + ' — ' + buf.duration.toFixed(1) + ' s'); })
+      .catch(function () { say('Could not fetch that (file:// blocks it). Drop a file in instead.'); });
+  }
+
+  document.getElementById('pick').onchange = function (e) { loadURL(e.target.value); };
+  document.getElementById('file').onchange = function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    ensureAC();
+    f.arrayBuffer().then(function (b) { return AC.decodeAudioData(b); }).then(function (buf) {
+      buffer = buf; say('Loaded ' + f.name + ' — ' + buf.duration.toFixed(1) + ' s');
+    });
+  };
+  document.getElementById('play').onclick = function () {
+    ensureAC();
+    if (AC.state === 'suspended') AC.resume();
+    if (!buffer) { loadURL(document.getElementById('pick').value).then(function () { S.play = true; }); return; }
+    S.play = !S.play;
+  };
+  document.getElementById('loop').onclick = function (e) {
+    var on = e.target.textContent.indexOf('on') < 0;
+    e.target.textContent = 'Loop: ' + (on ? 'on' : 'off');
+    if (srcNode) srcNode.loop = on;
+  };
+  document.addEventListener('pointerdown', function () { ensureAC(); if (AC.state === 'suspended') AC.resume(); });
+
+  /* ---------- the keyboard: a Rhodes straight into the tree ----------
+     Same input bus as the sample player, so notes go through the identical
+     graph — no second path to keep in step. */
+  var rhodes = null, latch = false, down = {};
+  var KEY_LO = 48, KEY_HI = 72;                  // C3..C5
+  var ROW = 'awsedftgyhujk';                     // computer keys, C upward
+  var BLACK = { 1:1, 3:1, 6:1, 8:1, 10:1 };
+
+  function synth() {
+    ensureAC();
+    if (AC.state === 'suspended') AC.resume();
+    if (!rhodes) {
+      rhodes = Rhodes.create(AC);
+      rhodes.out.connect(master.in);
+      rhodes.out.connect(master.dry);
+    }
+    return rhodes;
+  }
+
+  function inKey(midi) {
+    var degrees = LSystem.KEYS[Object.keys(LSystem.KEYS)[S.keyIdx]] || [];
+    // the device's root is A, and its scale degrees are counted from there
+    return degrees.indexOf((((midi - 57 - S.rootSemi) % 12) + 12) % 12) >= 0;
+  }
+
+  function press(midi, el) {
+    if (down[midi]) return;
+    down[midi] = true;
+    if (el) el.classList.add('down');
+    synth().noteOn(midi, 0.85);
+  }
+  function release(midi, el) {
+    if (!down[midi]) return;
+    delete down[midi];
+    if (el) el.classList.remove('down');
+    if (!latch) synth().noteOff(midi);
+  }
+
+  var keyEls = {};
+  (function buildKeys() {
+    var host = document.getElementById('keys');
+    for (var m = KEY_LO; m <= KEY_HI; m++) {
+      if (BLACK[((m % 12) + 12) % 12]) continue;           // whites lay out the row
+      var w = document.createElement('div');
+      w.className = 'w'; w.dataset.m = m;
+      if (m % 12 === 0) w.innerHTML = '<span class="lbl">C' + (Math.floor(m / 12) - 1) + '</span>';
+      host.appendChild(w); keyEls[m] = w;
+      var b = m + 1;
+      if (b <= KEY_HI && BLACK[((b % 12) + 12) % 12]) {
+        var bk = document.createElement('div');
+        bk.className = 'b'; bk.dataset.m = b;
+        w.appendChild(bk); keyEls[b] = bk;
+      }
+    }
+    host.addEventListener('pointerdown', function (e) {
+      var m = e.target.dataset && e.target.dataset.m;
+      if (!m) return;
+      e.preventDefault();
+      if (latch && down[+m]) { synth().noteOff(+m); delete down[+m]; e.target.classList.remove('down'); return; }
+      press(+m, e.target);
+      host.setPointerCapture(e.pointerId);
+    });
+    host.addEventListener('pointerup', function () {
+      if (latch) return;
+      Object.keys(down).forEach(function (m) { release(+m, keyEls[m]); });
+    });
+    host.addEventListener('pointerleave', function () {
+      if (latch) return;
+      Object.keys(down).forEach(function (m) { release(+m, keyEls[m]); });
+    });
+  })();
+
+  document.addEventListener('keydown', function (e) {
+    if (e.repeat || e.metaKey || e.ctrlKey || /input|select|textarea/i.test(e.target.tagName)) return;
+    var i = ROW.indexOf(e.key.toLowerCase());
+    if (i < 0) return;
+    e.preventDefault();
+    press(KEY_LO + 12 + i, keyEls[KEY_LO + 12 + i]);
+  });
+  document.addEventListener('keyup', function (e) {
+    var i = ROW.indexOf(e.key.toLowerCase());
+    if (i < 0) return;
+    release(KEY_LO + 12 + i, keyEls[KEY_LO + 12 + i]);
+  });
+  document.getElementById('latch').onclick = function (e) {
+    latch = !latch;
+    e.target.textContent = 'Latch: ' + (latch ? 'on' : 'off');
+    if (!latch && rhodes) { rhodes.panic(); Object.keys(down).forEach(function (m) {
+      delete down[m]; if (keyEls[m]) keyEls[m].classList.remove('down'); }); }
+  };
+
+  // Repaint the in-key lights when the scale or root moves.
+  var lastKey = '';
+  function lights() {
+    var sig = S.keyIdx + '/' + S.rootSemi;
+    if (sig === lastKey) return;
+    lastKey = sig;
+    Object.keys(keyEls).forEach(function (m) { keyEls[m].classList.toggle('inkey', inKey(+m)); });
+  }
+
+  return { sync: function () { sync(); lights(); } };
+})();
+
+var rackApi = Chassis.mount(document.getElementById('rack'), DLNY.lsystem, 'rack');
+Chassis.mount(document.getElementById('phone'), DLNY.lsystem, 'phone');
+
+var t0 = performance.now();
+(function loop(t) {
+  var spec = DLNY.lsystem;
+  if (spec.tick(spec.state, (t - t0) / 1000)) rackApi.paint();
+  DLNY_AUDIO.sync();
+  requestAnimationFrame(loop);
+})(t0);
+</script>
+</body>
+</html>

@@ -136,12 +136,73 @@ spec in ways worth naming rather than quietly overwriting:
 
 ---
 
+## 6 · L-system Branching Delay Tree — echoes that inherit from their parent
+
+![L-system branching delay tree](assets/img/06_lsystem.svg)
+
+🔊 [`06_lsystem_a_baseline.wav`](assets/audio/06_lsystem_a_baseline.wav)
+&nbsp;·&nbsp; [`b_scale_off`](assets/audio/06_lsystem_b_scale_off.wav)
+&nbsp;·&nbsp; [`c_just`](assets/audio/06_lsystem_c_just.wav)
+&nbsp;·&nbsp; [`d_ratio_high`](assets/audio/06_lsystem_d_ratio_high.wav)
+&nbsp;·&nbsp; [`e_branch3`](assets/audio/06_lsystem_e_branch3.wav)
+&nbsp;·&nbsp; [`f_long_decay`](assets/audio/06_lsystem_f_long_decay.wav)
+&nbsp;·&nbsp; [`g_growth`](assets/audio/06_lsystem_g_growth.wav)
+&nbsp;·&nbsp; [`h_key_locked`](assets/audio/06_lsystem_h_key_locked.wav)
+&nbsp;·&nbsp; [`i_phrygian`](assets/audio/06_lsystem_i_phrygian.wav)
+&nbsp;·&nbsp; [`j_hijaz`](assets/audio/06_lsystem_j_hijaz.wav)
+&nbsp;·&nbsp; [`k_hirajoshi`](assets/audio/06_lsystem_k_hirajoshi.wav)
+&nbsp;·&nbsp; [`z_flat_control`](assets/audio/06_lsystem_z_flat_control.wav)
+&nbsp;·&nbsp; sketch: [`prototypes/lsystem_tree_delay.py`](prototypes/lsystem_tree_delay.py)
+&nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/lsystem_chassis.html`](prototypes/lsystem_chassis.html) — one WebAudio voice per node, wind field, presets, and a Rhodes to play it with
+
+- **Math:** The turtle interpretation of the L-system *is* the delay graph. A segment is a
+  delay node (time, gain, pitch, pan, darkening); a child node reads its **parent's output**,
+  so delay times **compound geometrically** (`Σ L·r^n`) instead of being listed linearly.
+  `+`/`-` turns become pitch ratios, depth becomes `g^n` gain and cumulative lowpass — the
+  tree prunes itself when a branch's accumulated gain falls below -60 dB, so cost is bounded
+  without a depth knob.
+- **Sound:** One input explodes into a cloud where every sub-branch is a scaled copy of the
+  whole tail — self-similar, not a flat tap list. Rewriting the rule while audio runs makes
+  the tail sprout finer detail one generation at a time (`g_growth`).
+- **Scale control:** don't quantize the *angle*, quantize the *ratio*. `heading·cents_per_deg`
+  → snap to 12-TET (tonal, echoes arpeggiate up the branches), to just ratios (branches beat
+  pure against each other), or not at all (microtonal drift, further off-grid with depth).
+  One array swap between the three worlds.
+- **Key lock (`h`):** a key is *absolute*, an interval is *relative*, so locking one can't be done by
+  quantizing per-branch ratios — their products drift off the scale. Snap the **accumulated** pitch to a
+  degree of the chosen key, then back-solve the heading from it: the turtle can only turn to angles that
+  land on a degree, so **the tree itself grows along the key**. A minor pentatonic gives 17 distinct
+  pitches, all degrees, against the baseline's 59 free ratios — and the widest stereo field of the set.
+- **Scale tables:** minor pentatonic, natural minor, dorian, major, phrygian, maqam **hijaz**
+  (that augmented 2nd) and Japanese **hirajōshi**, plus a root-semitone transposition. The script
+  asserts every key-locked render uses only degrees of its key, and prints which degrees the geometry
+  never reached (hirajōshi never lands on its 2nd at 34°) rather than hiding it.
+- **Presets on a tonal source:** [`07_tonal_dry_Am.wav`](assets/audio/07_tonal_dry_Am.wav) is a held A drone
+  with a slow pentatonic arpeggio — long notes, so deep branches land while the source still sounds and the
+  result is harmony, not echo. Five presets: [`cathedral`](assets/audio/07_preset_cathedral.wav),
+  [`drone_web`](assets/audio/07_preset_drone_web.wav), [`koto_rain`](assets/audio/07_preset_koto_rain.wav),
+  [`hijaz_veil`](assets/audio/07_preset_hijaz_veil.wav), [`fifths`](assets/audio/07_preset_fifths.wav).
+  The sketch measures **in-key tail energy** (share of the tail's spectrum on degrees of the key, after the
+  source stops): key-locked presets land **83–96%**, against **44.6%** for
+  [the same tree with free 12-TET intervals](assets/audio/07_control_free_12tet.wav). Nothing hits 100% —
+  varispeed shifts a node's harmonics with it, and a 5th harmonic is a major third the scale may not contain.
+- **Control demo:** `z_flat_control` is the same node count with linear times and no
+  inheritance — a plain multitap. It's the A/B that justifies the architecture.
+- **Wind:** a pulsing field (two slow sines plus a swelling gust) bends the tips more than the trunk, and
+  a child inherits its parent's bend, so gusts swing whole branches. Heading *is* pitch, so the tree
+  retunes as it moves — and because the key snap is on the accumulated pitch, that lands as discrete
+  in-key steps rather than a slide. The bent branch also stretches, dragging its delay time: that drag is
+  the chirp you hear on the way. One `LSystem.grow(params, wind)` call returns the bent geometry, the bent
+  pitches and the stretched times together, so the drawing and the audio can't disagree.
+- **Effort:** Low. Node list is control-rate; `poly~` of delay voices renders it.
+
+---
+
 ## Shortlist — other unmined veins
 
 | Idea | Math | Sonic character |
 |---|---|---|
 | **Optimal transport spectral morph** | Wasserstein / earth-mover | one spectrum physically *flows* into another (not a crossfade) |
-| **L-systems** | recursive grammars | fractal, self-similar branching echo trees |
 | **Percolation theory** | critical-threshold connectivity | effect suddenly *ignites* into runaway texture at a phase transition |
 | **Persistent homology (TDA)** | topological shape of the feature cloud | birth/death of features triggers events (deep end) |
 | **Navier–Stokes advection** | fluid velocity field | spectral energy swirls / flows like current |

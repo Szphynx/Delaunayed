@@ -13,11 +13,15 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 | `chassis.css` | All device chrome, both bodies. Scoped under `.dlny`, dark-only. |
 | `chassis.js` | `Chassis.mount(host, spec, 'phone'\|'rack')` + the reusable page bodies. |
 | `randomize.js` | `Randomize.mount()` — the dice button and its amount knob, plus the model behind them. The chassis mounts it into the transport itself; the four single-file prototypes inline a copy that rolls their `<input type=range>` sliders instead. Keep the copies in sync. |
+| `rhodes.js` | `Rhodes.create(AC)` — a two-operator FM electric piano, so an effect can be played with notes instead of a sample. `node ui/test_rhodes.js`. |
 | `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS, and decodes AIFF/AIFC, which only Safari takes natively. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
 | `effects/delaunay.js` | Engine A of `prototypes/delaunay_delay.html`, as a spec. |
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
+| `effects/lsystem.js` | The L-system branching delay tree, as a spec. Five pages: TREE, TIME, KEY, WIND, MIX. |
+| `lsystem.js` | `LSystem.grow(params, wind)` — the tree itself. Pure, no DOM, no audio. `node ui/test_lsystem.js`. |
 | `index.html` | Host page and effect picker. Copy it to start a new device. |
 | *(consumer)* | [`../prototypes/delaunay_chassis.html`](../prototypes/delaunay_chassis.html) — the same spec with a real WebAudio engine attached. |
+| *(consumer)* | [`../prototypes/lsystem_chassis.html`](../prototypes/lsystem_chassis.html) — `lsystem` spec in both bodies, with one WebAudio voice per tree node attached. |
 | *(consumer)* | [`../prototypes/wfc_chassis.html`](../prototypes/wfc_chassis.html) — `wfc` spec, phone body only, with a real WebAudio engine (grain capture + gated multitap) attached. |
 | `test_chassis.js` | `node ui/test_chassis.js` — 29 checks, no framework. |
 | `test_audio_session.js` | `node ui/test_audio_session.js` — 8 checks on the AIFF parser, no fixtures on disk. |
@@ -222,3 +226,40 @@ selected from the `LVL` strips instead. Reveal-on-pick suits canvases whose mark
 - **`ponytail:`** That prototype's freeze loops a slice of the *source*, not the processed
   output — a few lines instead of a capture graph, and it sounds right for a buffer. It
   does nothing for live mic input; ring-buffer it through an AudioWorklet if that matters.
+
+## `tree-travel.js` — the L-system delay tree, drawn and animated
+
+`TreeTravel.mount(svgEl, nodes, opts)` draws a delay tree and animates one impulse
+travelling down it: a dot per branch in flight, labelled with node index, arrival level
+in dB and the note its pitch ratio lands on. `opts` takes `speed`, `labels`, `loop`,
+`hold`, `pad`, `onTick`; the returned handle has `play`, `pause`, `seek(t)` and `end`.
+
+`nodes` is the grower's control-rate output, not a drawing format — the same array a
+`poly~` voice bank would read:
+
+    { i, parent, t, db, note, x, y, px, py, depth, pan }
+
+`prototypes/lsystem_tree_delay.py` writes `assets/lsystem_travel.json` in exactly this
+shape, one entry per variant. `x, y, px, py` are the only drawing-only fields; strip
+them and the rest is the patch.
+
+- **`ponytail:`** `TreeTravel.frame(nodes, t)` is pure and DOM-free — it answers "what is
+  in flight and what has just fired at time t". The animation draws from it, and the
+  engine can call the same function to know which voices are sounding. That's why the
+  timing lives there and not in the render loop. `node ui/test_tree_travel.js` covers it.
+- **`ponytail:`** `rhodes.js` is two oscillators, two gains and a lowpass per note — a carrier
+  at the note and a modulator 14× above it whose depth dies in ~120 ms, which is the tine.
+  Velocity drives the modulation index, not just level, so digging in gets *brighter*. No
+  samples, no wavetable, no library. It is not a Suitcase (no pickup asymmetry, no tremolo,
+  no key-off thunk) but it plays in tune and sounds like the right instrument through a delay,
+  which is all it is for.
+- **`ponytail:`** The chassis hands `draw` a canvas it does not clear, so `TreeTravel.paint`
+  paints its own ground. Without that a swaying tree smears across every frame — a spec
+  that draws a still picture never notices.
+- **`ponytail:`** Preset and scale values are abbreviated to six characters in
+  `effects/lsystem.js` because the rack lays four controls into 106 px. The full name is
+  the page's context line, which has the room.
+- **`ponytail:`** Trees are exported at depth 4 (~31 nodes) for the page. The audio runs
+  511. Animating the full tree is legible only as a cloud, so the shallow copy is the
+  visualisation and the deep one is the sound; regenerate both from the same `grow()` call
+  if the params change.
