@@ -16,8 +16,11 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 | `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS, and decodes AIFF/AIFC, which only Safari takes natively. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
 | `effects/delaunay.js` | Engine A of `prototypes/delaunay_delay.html`, as a spec. |
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
+| `effects/lsystem.js` | The L-system branching delay tree, as a spec. Five pages: TREE, TIME, KEY, WIND, MIX. |
+| `lsystem.js` | `LSystem.grow(params, wind)` — the tree itself. Pure, no DOM, no audio. `node ui/test_lsystem.js`. |
 | `index.html` | Host page and effect picker. Copy it to start a new device. |
 | *(consumer)* | [`../prototypes/delaunay_chassis.html`](../prototypes/delaunay_chassis.html) — the same spec with a real WebAudio engine attached. |
+| *(consumer)* | [`../prototypes/lsystem_chassis.html`](../prototypes/lsystem_chassis.html) — `lsystem` spec in both bodies, with one WebAudio voice per tree node attached. |
 | *(consumer)* | [`../prototypes/wfc_chassis.html`](../prototypes/wfc_chassis.html) — `wfc` spec, phone body only, with a real WebAudio engine (grain capture + gated multitap) attached. |
 | `test_chassis.js` | `node ui/test_chassis.js` — 29 checks, no framework. |
 | `test_audio_session.js` | `node ui/test_audio_session.js` — 8 checks on the AIFF parser, no fixtures on disk. |
@@ -243,6 +246,12 @@ them and the rest is the patch.
   in flight and what has just fired at time t". The animation draws from it, and the
   engine can call the same function to know which voices are sounding. That's why the
   timing lives there and not in the render loop. `node ui/test_tree_travel.js` covers it.
+- **`ponytail:`** The chassis hands `draw` a canvas it does not clear, so `TreeTravel.paint`
+  paints its own ground. Without that a swaying tree smears across every frame — a spec
+  that draws a still picture never notices.
+- **`ponytail:`** Preset and scale values are abbreviated to six characters in
+  `effects/lsystem.js` because the rack lays four controls into 106 px. The full name is
+  the page's context line, which has the room.
 - **`ponytail:`** Trees are exported at depth 4 (~31 nodes) for the page. The audio runs
   511. Animating the full tree is legible only as a cloud, so the shallow copy is the
   visualisation and the deep one is the sound; regenerate both from the same `grow()` call

@@ -156,7 +156,68 @@
     return api;
   }
 
-  var TreeTravel = { frame: frame, span: span, mount: mount };
+  /* ---- canvas painter ----------------------------------------------------
+     The chassis draws to a canvas at two very different sizes, so this fits
+     the tree to whatever box it is given. Same encoding as the SVG mount:
+     stroke width is node gain, hue is pitch, a dot is the signal in flight. */
+  function paint(ctx, W, H, nodes, t, opts) {
+    opts = opts || {};
+    var pad = opts.pad == null ? 12 : opts.pad;
+    var xs = nodes.map(function (n) { return n.x; }).concat([0]);
+    var ys = nodes.map(function (n) { return n.y; }).concat([0]);
+    var minx = Math.min.apply(null, xs), maxx = Math.max.apply(null, xs);
+    var miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys);
+    var k = Math.min((W - 2 * pad) / ((maxx - minx) || 1), (H - 2 * pad) / ((maxy - miny) || 1));
+    var ox = W / 2 - k * (minx + maxx) / 2, oy = H - pad + k * maxy;
+    var TX = function (x) { return ox + k * x; }, TY = function (y) { return oy + k * y; };
+    // Blue through teal only: pitch reads as a shift within one family rather
+    // than a rainbow, which is what keeps a swaying tree legible.
+    var hue = function (n) {
+      var v = n.semi == null ? n.depth * 2 : n.semi;
+      return 158 + Math.max(0, Math.min(60, v * 2.4 + 30));
+    };
+
+    // The chassis hands over a canvas it does not clear — each spec paints its
+    // own ground, so a moving tree would otherwise smear across every frame.
+    ctx.fillStyle = opts.bg || '#08192a';
+    ctx.fillRect(0, 0, W, H);
+
+    var f = frame(nodes, t);
+    nodes.forEach(function (n) {
+      ctx.strokeStyle = 'hsl(' + hue(n) + ' 62% ' + Math.min(70, 34 + 40 * n.gain) + '%)';
+      ctx.lineWidth = Math.max(0.6, 4 * n.gain);
+      ctx.beginPath();
+      ctx.moveTo(TX(n.px), TY(n.py));
+      ctx.lineTo(TX(n.x), TY(n.y));
+      ctx.stroke();
+    });
+    nodes.forEach(function (n, i) {
+      if (!f[i].fired) return;
+      ctx.fillStyle = 'hsl(' + hue(n) + ' 85% 64%)';
+      ctx.globalAlpha = Math.max(0.25, 1 - f[i].since * 1.1);
+      ctx.beginPath();
+      ctx.arc(TX(n.x), TY(n.y), Math.max(1.4, 3.2 * n.gain + (f[i].since < 0.3 ? 6 * f[i].since : 0)), 0, 6.284);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+    // A whole generation is in flight at once, so labelling every dot buries
+    // the tree. Three at a time is enough to read what a dot carries.
+    var labelled = 0, LABEL_MAX = opts.labelMax || 3;
+    f.forEach(function (d, i) {
+      if (!d.flying) return;
+      ctx.fillStyle = 'hsl(' + hue(nodes[i]) + ' 90% 70%)';
+      ctx.beginPath(); ctx.arc(TX(d.x), TY(d.y), 3, 0, 6.284); ctx.fill();
+      if (opts.labels && labelled < LABEL_MAX && d.u > 0.2 && d.u < 0.88) {
+        labelled++;
+        ctx.font = '9px ui-monospace, monospace';
+        ctx.fillStyle = 'rgba(159,199,218,.9)';
+        ctx.textAlign = nodes[i].x < nodes[i].px ? 'right' : 'left';
+        ctx.fillText(d.label, TX(d.x) + (nodes[i].x < nodes[i].px ? -7 : 7), TY(d.y) + 3);
+      }
+    });
+  }
+
+  var TreeTravel = { frame: frame, span: span, mount: mount, paint: paint };
   if (typeof module === 'object' && module.exports) module.exports = TreeTravel;
   root.TreeTravel = TreeTravel;
 })(typeof window === 'undefined' ? global : window);
