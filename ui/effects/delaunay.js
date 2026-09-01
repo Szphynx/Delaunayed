@@ -322,6 +322,10 @@ var DLNY = window.DLNY || (window.DLNY = {});
     // hold is also where right-click lands, so it reveals too — the contract
     // ui/README.md claims for reaching a node's editor on either input.
     if (phase === 'hold') {
+      // FRZ is a press-and-hold gesture, same as the 400ms hold everywhere
+      // else on the chassis: whatever cell is under the head when the hold
+      // lands is what gets latched.
+      if (s.engine === 'freeze') s.latch = true;
       var h = nearest(q);
       if (h < 0) return;
       s.sel = h; reveal(s);
@@ -354,6 +358,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
     }
 
     if (phase === 'up') {
+      if (s.engine === 'freeze') s.latch = false;
       var wasEditing = mode === 'edit' || mode === 'move';
       mode = null; grab = null; s.editing = null;
       if (wasEditing) api.render();   // page values must catch up with the drag
