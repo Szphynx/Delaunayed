@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Delaunay - Manual</title>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<div class="wrap" id="masthead">
+  <h1>Delaunay<span>.</span></h1>
+  <div class="tagline">A constellation of delay taps you navigate with a playhead, on the phone chassis.</div>
+  <div class="index">
+    <a href="manual.html">&larr;&nbsp;All&nbsp;manuals</a>
+    <a href="prototypes/delaunay_chassis.html" target="_blank" rel="noopener">Open&nbsp;device&nbsp;&#8599;</a>
+    <a href="#what">What&nbsp;it&nbsp;is</a>
+    <a href="#engines">Engines</a>
+    <a href="#controls">Controls</a>
+    <a href="#recipes">Recipes</a>
+  </div>
+</div>
+
+<section id="what">
+  <h2>What it is</h2>
+  <p class="lede">Delay taps scattered across a plane. A playhead sits among them, and the three taps around it are blended by how close it is to each. Move the playhead and the delay morphs continuously.</p>
+  <p>Every dot is a full delay voice with its own time, pitch, level, feedback, stereo position and tone. Drag through the field and you glide between them; nothing switches abruptly.</p>
+  <ol class="steps">
+    <li><b>Tap anywhere once.</b> Browsers only start audio inside a real interaction; the first tap wakes the engine and loads the built-in loop.</li>
+    <li><b>Pick a source.</b> <b>Load file</b> takes WAV, AIFF, MP3 or M4A, and you can drag a file onto the page. <b>Audio in</b> uses your microphone. <b>Loop</b> repeats the file instead of playing it once.</li>
+    <li><b>Press &#9654;.</b> The source starts and the device processes it.</li>
+    <li><b>Set Dry/Wet</b> on the MIX page. The dry signal always passes underneath, so at 0% you hear the source untouched.</li>
+  </ol>
+  <h3>Gestures</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Gesture</th><th>Touch</th><th>Desktop</th><th>What it does</th></tr></thead>
+      <tbody>
+      <tr><td class="k">Tap empty space</td><td class="r">tap</td><td>click</td><td>Moves the playhead there. The nearest taps get louder.</td></tr>
+      <tr><td class="k">Tap a dot</td><td class="r">tap</td><td>click</td><td>Selects that tap and opens its page.</td></tr>
+      <tr><td class="k">Hold a dot, drag</td><td class="r">press 0.4s, drag</td><td>right-click, drag</td><td>Edits it in place: up/down sets delay time, left/right sets feedback.</td></tr>
+      <tr><td class="k">Hold (FRZ engine)</td><td class="r">press 0.4s</td><td>right-click</td><td>Freezes onto the nearest tap and loops it. Lift to release.</td></tr>
+      <tr><td class="k">Shift-drag a dot</td><td class="r">&mdash;</td><td>shift-drag</td><td>Moves the tap and re-shapes the constellation.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="engines">
+  <h2>The two engines</h2>
+<figure>
+    <svg viewBox="0 0 900 250" role="img" aria-label="The playhead sits inside a triangle of taps and blends all three by distance. In DLY mode this blend is continuous. In FRZ mode, holding freezes onto the single nearest tap and loops what it is playing.">
+      <defs>
+        <marker id="m2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="'JetBrains Mono',monospace" font-size="11.5" fill="currentColor">
+        <text x="16" y="20" font-size="10.5" opacity=".6">THE CONSTELLATION</text>
+        <g transform="translate(16,32)">
+          <g stroke="currentColor" opacity=".22">
+            <line x1="18" y1="140" x2="88" y2="26"/><line x1="88" y1="26" x2="164" y2="64"/>
+            <line x1="18" y1="140" x2="88" y2="112"/><line x1="88" y1="112" x2="164" y2="64"/>
+            <line x1="88" y1="26" x2="88" y2="112"/><line x1="18" y1="140" x2="164" y2="64"/>
+            <line x1="88" y1="112" x2="140" y2="164"/><line x1="164" y1="64" x2="140" y2="164"/>
+          </g>
+          <polygon points="18,140 88,26 164,64" fill="#ff2a2a" fill-opacity=".07" stroke="#ff2a2a" stroke-opacity=".45"/>
+          <circle cx="18" cy="140" r="5" fill="#5ad1c8"/><circle cx="88" cy="26" r="5" fill="#f2a65a"/>
+          <circle cx="164" cy="64" r="5" fill="#c86bfa"/><circle cx="88" cy="112" r="4" fill="#f26b8a"/>
+          <circle cx="140" cy="164" r="4" fill="#4af626"/>
+          <line x1="83" y1="88" x2="18" y2="140" stroke="#5ad1c8" stroke-width="2.6" opacity=".85"/>
+          <line x1="83" y1="88" x2="88" y2="26" stroke="#f2a65a" stroke-width="1.6" opacity=".7"/>
+          <line x1="83" y1="88" x2="164" y2="64" stroke="#c86bfa" stroke-width="1" opacity=".5"/>
+          <circle cx="83" cy="88" r="4.5" fill="#ff2a2a"/>
+        </g>
+        <text x="16" y="228" font-size="10" opacity=".6">red dot = playhead &middot; closer tap = louder</text>
+
+        <line x1="220" y1="80" x2="264" y2="80" stroke="#ff2a2a" marker-end="url(#m2)"/>
+        <line x1="220" y1="170" x2="264" y2="170" stroke="#5ad1c8" marker-end="url(#m2)"/>
+
+        <rect x="266" y="44" width="216" height="72" fill="none" stroke="#ff2a2a"/>
+        <text x="374" y="70" text-anchor="middle" fill="#ff2a2a" font-weight="700" font-size="11.5">DLY &mdash; MORPH</text>
+        <text x="374" y="89" text-anchor="middle" font-size="10.5" opacity=".8">three taps blended at once,</text>
+        <text x="374" y="104" text-anchor="middle" font-size="10.5" opacity=".8">always crossfading</text>
+
+        <rect x="266" y="134" width="216" height="72" fill="none" stroke="#5ad1c8"/>
+        <text x="374" y="160" text-anchor="middle" fill="#5ad1c8" font-weight="700" font-size="11.5">FRZ &mdash; FREEZE</text>
+        <text x="374" y="179" text-anchor="middle" font-size="10.5" opacity=".8">hold to lock onto one tap</text>
+        <text x="374" y="194" text-anchor="middle" font-size="10.5" opacity=".8">and loop what it's playing</text>
+
+        <line x1="482" y1="80" x2="556" y2="112" stroke="#ff2a2a" opacity=".7"/>
+        <line x1="482" y1="170" x2="556" y2="138" stroke="#5ad1c8" opacity=".7"/>
+        <rect x="558" y="86" width="150" height="78" fill="none" stroke="currentColor" opacity=".5"/>
+        <text x="633" y="112" text-anchor="middle" font-weight="700" font-size="11.5">TAP VOICE</text>
+        <text x="633" y="130" text-anchor="middle" font-size="10.5" opacity=".7">time, pitch, tone,</text>
+        <text x="633" y="145" text-anchor="middle" font-size="10.5" opacity=".7">feedback, FX</text>
+
+        <line x1="708" y1="125" x2="742" y2="125" stroke="currentColor" marker-end="url(#m2)"/>
+        <rect x="744" y="86" width="146" height="78" fill="none" stroke="#ff2a2a"/>
+        <text x="817" y="112" text-anchor="middle" fill="#ff2a2a" font-weight="700" font-size="11.5">OUTPUT MIX</text>
+        <text x="817" y="131" text-anchor="middle" font-size="10.5" opacity=".75">Dry/Wet, Width,</text>
+        <text x="817" y="146" text-anchor="middle" font-size="10.5" opacity=".75">Tone, Output</text>
+      </g>
+    </svg>
+    <figcaption><b>DLY</b> is the continuous mode: three taps sound at once, weighted by where
+      the playhead sits, so crossing the field sweeps smoothly through delay behaviours.
+      <b>FRZ</b> is the opposite: hold anywhere on the canvas and the device locks hard onto
+      the single nearest tap and loops what it's currently playing. Let go to release.</figcaption>
+  </figure></section>
+
+<section id="controls">
+  <h2>Controls</h2>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Where</th><th>What it does</th></tr></thead>
+      <tbody>
+      <tr><td class="k">&#9654;</td><td class="r">transport</td><td>Starts and stops the source.</td></tr>
+      <tr><td class="k">DLY / FRZ</td><td class="r">transport</td><td>Continuous morph, or hold-to-freeze.</td></tr>
+      <tr><td class="k">DRIFT</td><td class="r">transport</td><td>Hands the playhead to a slow automatic sweep.</td></tr>
+      <tr><td class="k">&#8635;</td><td class="r">transport</td><td>Scatters a completely new constellation.</td></tr>
+      <tr><td class="k">&frac12;&times; / 1&times; / 2&times;</td><td class="r">transport</td><td>Halves or doubles every delay time at once.</td></tr>
+      <tr><td class="k">Dry/Wet</td><td class="r">MIX</td><td>How much delayed sound sits over the dry source.</td></tr>
+      <tr><td class="k">Feedback</td><td class="r">MIX</td><td>Master control over how much every tap repeats, on top of each tap&rsquo;s own setting.</td></tr>
+      <tr><td class="k">Glide</td><td class="r">MIX</td><td>How quickly the device follows the playhead and your control moves.</td></tr>
+      <tr><td class="k">Width</td><td class="r">MIX</td><td>Widens or narrows the stereo spread of the constellation.</td></tr>
+      <tr><td class="k">Tap strips</td><td class="r">LVL</td><td>Level, mute and solo per tap, with pan and tone sliders under each.</td></tr>
+      <tr><td class="k">Time / Pitch / Volume / Feedback</td><td class="r">TAP</td><td>The selected tap&rsquo;s own settings. Time is note-relative, pitch is in semitones.</td></tr>
+      <tr><td class="k">Inserts</td><td class="r">FX</td><td>Adds one effect to the selected tap.</td></tr>
+      <tr><td class="k">Freeze len</td><td class="r">FRZ</td><td>How long a slice gets captured and looped while you hold. Short stutters, long holds a phrase.</td></tr>
+      <tr><td class="k">Freeze F/B</td><td class="r">FRZ</td><td>How much the frozen loop feeds itself &mdash; how thick the held sound gets.</td></tr>
+      <tr><td class="k">Output / Tone</td><td class="r">OUT</td><td>Master level and a lowpass filter over the wet signal.</td></tr>
+      <tr><td class="k">Tempo / Taps</td><td class="r">OUT</td><td>Tempo for the note divisions, and how many taps the constellation holds.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Insert FX</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Effect</th><th>Knob</th><th>Sound</th></tr></thead>
+      <tbody>
+      <tr><td class="k">Phaser</td><td class="r">Rate</td><td>Sweeping, hollow movement. Slow rates breathe; fast rates wobble.</td></tr>
+      <tr><td class="k">Ring Mod</td><td class="r">Freq</td><td>Metallic and bell-like. Low frequencies growl, high ones turn pitched material into clangs.</td></tr>
+      <tr><td class="k">Grain</td><td class="r">Size</td><td>A short smeared echo that thickens the voice. Small sizes shimmer, larger ones blur.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="recipes">
+  <h2>Recipes</h2>
+  <div class="recipe">
+    <b>Navigable sweep</b>
+    <p><em>DLY</em>. Glide around 200&nbsp;ms, then drag the playhead slowly across the field &mdash; times and pitches morph as you cross each triangle. Switch on DRIFT to let it wander alone.</p>
+  </div>
+  <div class="recipe">
+    <b>Freeze stutter</b>
+    <p><em>FRZ</em>. Freeze len 60&ndash;150&nbsp;ms, Freeze F/B around 50%. Hold and drag &mdash; each cell you cross latches a different loop.</p>
+  </div>
+  <div class="recipe">
+    <b>Wide bloom</b>
+    <p>Width past 120%, Feedback around 60%, a few taps pitched up a fifth on the TAP page.</p>
+  </div>
+</section>
+
+<footer>
+  <span>Delaunay - geometric delay &amp; freeze.</span>
+  <span><a href="manual.html">All manuals</a> &middot; <a href="index.html">Index</a> &middot; <a href="README.md">README</a></span>
+</footer>
+
+</body></html>

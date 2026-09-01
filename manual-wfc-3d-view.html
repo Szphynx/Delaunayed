@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WFC 3D Visualizer - Manual</title>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<div class="wrap" id="masthead">
+  <h1>WFC&nbsp;3D<span>.</span></h1>
+  <div class="tagline">A standalone view of the collapse itself: watch the solver fill a three-dimensional grid.</div>
+  <div class="index">
+    <a href="manual.html">&larr;&nbsp;All&nbsp;manuals</a>
+    <a href="prototypes/wfc_3d_view.html" target="_blank" rel="noopener">Open&nbsp;device&nbsp;&#8599;</a>
+    <a href="#what">What&nbsp;it&nbsp;is</a>
+    <a href="#controls">Controls</a>
+  </div>
+</div>
+
+<section id="what">
+  <h2>What it is</h2>
+  <p class="lede">A visualizer rather than a full device: it runs the collapse and draws the result as a rotating block, so you can watch how a pattern resolves and how grid size changes its character.</p>
+  <p>Drag the scene to rotate it. Press <b>&#10704; Collapse</b> to solve a new pattern, or <b>&#8635; Roll</b> to nudge the existing one.</p>
+</section>
+
+<section id="controls">
+  <h2>Controls</h2>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+      <tr><td class="k">&#9654;</td><td class="r">transport</td><td>Runs the playhead through the pattern.</td></tr>
+      <tr><td class="k">&#10704; Collapse</td><td class="r">transport</td><td>Solves a whole new pattern.</td></tr>
+      <tr><td class="k">&#8635; Roll</td><td class="r">transport</td><td>Re-throws part of the current pattern rather than replacing it.</td></tr>
+      <tr><td class="k">Roll amt</td><td class="r">0&ndash;100%</td><td>How much of the pattern a roll may change. Low nudges, high replaces.</td></tr>
+      <tr><td class="k">Steps</td><td class="r">8&ndash;24</td><td>Length of the pattern.</td></tr>
+      <tr><td class="k">Lanes</td><td class="r">3&ndash;8</td><td>How many lanes deep the block is.</td></tr>
+      <tr><td class="k">Tempo</td><td class="r">60&ndash;200</td><td>Playhead speed in BPM.</td></tr>
+      <tr><td class="k">Send</td><td class="r">0&ndash;90%</td><td>How much the pattern feeds the echo bus.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<footer>
+  <span>Delaunay - geometric delay &amp; freeze.</span>
+  <span><a href="manual.html">All manuals</a> &middot; <a href="index.html">Index</a> &middot; <a href="README.md">README</a></span>
+</footer>
+
+</body></html>
