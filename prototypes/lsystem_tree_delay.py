@@ -206,27 +206,31 @@ if __name__ == "__main__":
     svg(flat, os.path.join(IMG, "06_lsystem_z_flat_control.svg"),
         "same node budget, laid out linearly | no inheritance, no pitch")
 
-    # a small, legible tree exported for the travel animation on the doc page
+    # depth-4 versions of every variant, exported for ui/tree-travel.js
     import json
-    tnodes = grow(**dict(base, scale="key", key="minor_pentatonic",
-                         **dict(KEYBASE, max_depth=4)))
     NAMES = ["A", "A\u266f", "B", "C", "C\u266f", "D", "D\u266f", "E", "F", "F\u266f", "G", "G\u266f"]
-    def name(pitch):
+    def note_name(pitch):
         semis = round(12 * math.log2(pitch))
         return NAMES[semis % 12] + str(3 + (semis + 9) // 12)
-    key_of = lambda n: (round(n[7], 4), round(n[8], 4))     # parent coords
-    index = {}
-    out = []
-    for i, n in enumerate(tnodes):
-        index[(round(n[5], 4), round(n[6], 4))] = i
-    for i, n in enumerate(tnodes):
-        t, g, pit, pan, depth, x, y, px, py = n
-        out.append(dict(i=i, parent=index.get(key_of(n), -1), t=round(t, 4),
-                        db=round(20 * math.log10(max(g, 1e-6)), 1), note=name(pit),
-                        x=round(x, 2), y=round(y, 2), px=round(px, 2), py=round(py, 2),
-                        depth=depth, pan=round(pan, 3)))
-    json.dump(out, open(os.path.join(HERE, "..", "assets", "lsystem_travel.json"), "w"))
-    print(f"wrote lsystem_travel.json ({len(out)} nodes)")
+
+    def travel(nodes):
+        index = {(round(n[5], 4), round(n[6], 4)): i for i, n in enumerate(nodes)}
+        out = []
+        for i, n in enumerate(nodes):
+            t, g, pit, pan, depth, x, y, px, py = n
+            out.append(dict(i=i, parent=index.get((round(px, 4), round(py, 4)), -1),
+                            t=round(t, 4), db=round(20 * math.log10(max(g, 1e-6)), 1),
+                            note=note_name(pit), x=round(x, 2), y=round(y, 2),
+                            px=round(px, 2), py=round(py, 2), depth=depth, pan=round(pan, 3)))
+        return out
+
+    trav = {}
+    for name, over in variants:
+        pp = dict(base); pp.update(over); pp["max_depth"] = 4
+        trav[name.replace("06_lsystem_", "").replace(".wav", "")] = travel(grow(**pp))
+    json.dump(trav, open(os.path.join(HERE, "..", "assets", "lsystem_travel.json"), "w"))
+    print(f"wrote lsystem_travel.json ({len(trav)} variants, "
+          f"{sum(len(v) for v in trav.values())} nodes)")
 
     # the README hero stays the baseline tree
     svg(grow(**base), os.path.join(IMG, "06_lsystem.svg"),

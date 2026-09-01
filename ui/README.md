@@ -222,3 +222,28 @@ selected from the `LVL` strips instead. Reveal-on-pick suits canvases whose mark
 - **`ponytail:`** That prototype's freeze loops a slice of the *source*, not the processed
   output — a few lines instead of a capture graph, and it sounds right for a buffer. It
   does nothing for live mic input; ring-buffer it through an AudioWorklet if that matters.
+
+## `tree-travel.js` — the L-system delay tree, drawn and animated
+
+`TreeTravel.mount(svgEl, nodes, opts)` draws a delay tree and animates one impulse
+travelling down it: a dot per branch in flight, labelled with node index, arrival level
+in dB and the note its pitch ratio lands on. `opts` takes `speed`, `labels`, `loop`,
+`hold`, `pad`, `onTick`; the returned handle has `play`, `pause`, `seek(t)` and `end`.
+
+`nodes` is the grower's control-rate output, not a drawing format — the same array a
+`poly~` voice bank would read:
+
+    { i, parent, t, db, note, x, y, px, py, depth, pan }
+
+`prototypes/lsystem_tree_delay.py` writes `assets/lsystem_travel.json` in exactly this
+shape, one entry per variant. `x, y, px, py` are the only drawing-only fields; strip
+them and the rest is the patch.
+
+- **`ponytail:`** `TreeTravel.frame(nodes, t)` is pure and DOM-free — it answers "what is
+  in flight and what has just fired at time t". The animation draws from it, and the
+  engine can call the same function to know which voices are sounding. That's why the
+  timing lives there and not in the render loop. `node ui/test_tree_travel.js` covers it.
+- **`ponytail:`** Trees are exported at depth 4 (~31 nodes) for the page. The audio runs
+  511. Animating the full tree is legible only as a cloud, so the shallow copy is the
+  visualisation and the deep one is the sound; regenerate both from the same `grow()` call
+  if the params change.
