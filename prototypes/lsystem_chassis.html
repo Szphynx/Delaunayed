@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"/>
 <link rel="stylesheet" href="../ui/chassis.css"/>
 <style>
+  html,body{overflow-x:hidden}   /* the phone is scaled to fit width in JS; this is only a backstop */
   body{margin:0;padding:0 16px 56px;background:#061420;color:#dfeef6;
        font:13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
        background-image:linear-gradient(rgba(95,192,228,.05) 1px,transparent 1px),
@@ -24,7 +25,17 @@
   .lede b{font-style:normal;font-family:inherit;font-weight:400;color:#dfeef6}
   .bodies{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
   .cap{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#4f7d95;margin:0 0 9px}
-  #src{border:1px solid #1b4160;background:#0d2233;padding:12px 14px;margin-top:26px}
+  #phonemount{display:flex;justify-content:center;overflow:hidden}
+  #phone{transform-origin:top center}
+  /* The rack is a fixed 632px mockup, wider than most phones. Below that it
+     just doesn't fit next to the phone without forcing the whole page to
+     scroll sideways, so it drops out rather than squeezing the layout. */
+  @media (max-width:760px){ .rackcol{display:none} }
+  /* Independent of either device column, so it stays the width of the
+     viewport whichever body is showing instead of inheriting the rack's
+     fixed 632px. */
+  #src{border:1px solid #1b4160;background:#0d2233;padding:12px 14px;margin:26px auto 0;
+       max-width:632px;width:100%}
   #src button,#src select,#src input[type=file]{font:inherit;font-size:11px;background:#08192a;
     color:#dfeef6;border:1px solid #2c6c8c;padding:5px 9px;border-radius:2px;cursor:pointer}
   #src button:hover,#src select:hover{border-color:#5fc0e4;color:#5fc0e4}
@@ -32,6 +43,7 @@
   #src p{color:#7fa3b8;font-size:11px;margin:9px 0 0}
   /* keyboard — two octaves, in-key notes lit so you can hear the lock working */
   #keys{display:flex;position:relative;height:74px;margin-top:12px;user-select:none;touch-action:none}
+  @media (max-width:480px){ #keys{height:58px} #keys .lbl{font-size:7px} }
   
   #keys .w{flex:1;background:#c9dde8;border:1px solid #0d2a40;border-top:none;border-radius:0 0 3px 3px;
            position:relative;cursor:pointer}
@@ -55,31 +67,32 @@
   </header>
 
   <div class="bodies">
-    <div>
+    <div class="rackcol">
       <p class="cap">Live device · 632 × 168</p>
       <div id="rack"></div>
-      <div id="src">
-        <div class="line">
-          <button id="play">Play</button>
-          <button id="loop">Loop: on</button>
-          <select id="pick">
-            <option value="../assets/audio/07_tonal_dry_Am.wav">A minor drone</option>
-            <option value="../assets/audio/00_dry_source.wav">Marimba</option>
-            <option value="../assets/audio/amen_break_138bpm.wav">Amen break</option>
-          </select>
-          <input type="file" id="file" accept="audio/*"/>
-          <button id="latch">Latch: off</button>
-        </div>
-        <div id="keys"></div>
-        <p id="hint">Play the keys (or your computer's <code>a w s e d f t g y h u j k</code> row) to feed
-          the tree notes instead of a sample. Lit keys are in the device's current scale. Serve the folder
-          for the built-in sources (<code>npx http-server</code>), or drop a file in.</p>
-      </div>
     </div>
     <div>
       <p class="cap">Phone · 390 × 844</p>
-      <div id="phone"></div>
+      <div id="phonemount"><div id="phone"></div></div>
     </div>
+  </div>
+
+  <div id="src">
+    <div class="line">
+      <button id="play">Play</button>
+      <button id="loop">Loop: on</button>
+      <select id="pick">
+        <option value="../assets/audio/07_tonal_dry_Am.wav">A minor drone</option>
+        <option value="../assets/audio/00_dry_source.wav">Marimba</option>
+        <option value="../assets/audio/amen_break_138bpm.wav">Amen break</option>
+      </select>
+      <input type="file" id="file" accept="audio/*"/>
+      <button id="latch">Latch: off</button>
+    </div>
+    <div id="keys"></div>
+    <p id="hint">Play the keys (or your computer's <code>a w s e d f t g y h u j k</code> row) to feed
+      the tree notes instead of a sample. Lit keys are in the device's current scale. Serve the folder
+      for the built-in sources (<code>npx http-server</code>), or drop a file in.</p>
   </div>
 </div>
 
@@ -358,6 +371,25 @@ var DLNY_AUDIO = (function () {
 
 var rackApi = Chassis.mount(document.getElementById('rack'), DLNY.lsystem, 'rack');
 Chassis.mount(document.getElementById('phone'), DLNY.lsystem, 'phone');
+
+/* ---------- scale the fixed 390x844 phone body to fit the real viewport ----------
+   Same fix as prototypes/wfc_chassis.html: the box is a mockup size, not
+   something that reflows, and plenty of real phones are narrower or shorter
+   than that once browser chrome is subtracted. */
+function fitPhone() {
+  var phone = document.getElementById('phone'), mount = phone.parentElement;
+  var pad = 24, vw = window.innerWidth, vh = window.innerHeight;
+  phone.style.transform = 'scale(1)'; mount.style.height = '844px';
+  var top = mount.getBoundingClientRect().top;
+  var availH = vh - top - 16;
+  var scale = Math.min(1, (vw - pad) / 390, availH / 844);
+  scale = Math.max(0.35, scale);
+  phone.style.transform = 'scale(' + scale.toFixed(4) + ')';
+  mount.style.height = Math.ceil(844 * scale) + 'px';
+}
+window.addEventListener('resize', fitPhone);
+window.addEventListener('orientationchange', fitPhone);
+fitPhone();
 
 var t0 = performance.now();
 (function loop(t) {

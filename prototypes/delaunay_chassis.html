@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"/>
 <link rel="stylesheet" href="../ui/chassis.css"/>
 <style>
+  html,body{overflow-x:hidden}   /* the phone is scaled to fit width in JS; this is only a backstop */
   body{margin:0;padding:0 20px 56px;background:#0a0a0a;color:#eaeaea;
        font:13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
        background-image:linear-gradient(rgba(255,255,255,.014) 1px,transparent 1px),
@@ -22,6 +23,12 @@
   .lede b{font-style:normal;font-family:inherit;font-weight:400;color:#eaeaea}
   .bench{display:flex;gap:44px;flex-wrap:wrap;align-items:flex-start}
   .mount{display:flex;flex-direction:column;gap:10px}
+  #phonemount{display:flex;justify-content:center;overflow:hidden}
+  #phone{transform-origin:top center}
+  /* .live is a fixed 632px mockup, wider than most phones — rather than
+     force the whole page to scroll sideways next to it, it drops out below
+     the breakpoint and the phone body is the mobile experience. */
+  @media (max-width:760px){ .rackcol{display:none} }
   .spec{display:flex;align-items:baseline;gap:10px;font-size:10px;letter-spacing:.18em;
         text-transform:uppercase;color:#6d6d6d}
   .spec .n{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:18px;
@@ -63,9 +70,9 @@
   <div class="bench">
     <div class="mount">
       <div class="spec"><span class="n">390 × 844</span><span class="rule"></span><span>Phone · portrait</span></div>
-      <div id="phone"></div>
+      <div id="phonemount"><div id="phone"></div></div>
     </div>
-    <div class="mount">
+    <div class="mount rackcol">
       <div class="spec"><span class="n">632 × 168</span><span class="rule"></span><span>Live device strip · 1:1</span></div>
       <div class="live">
         <div class="livehdr"><span class="dot"></span><span>Audio&nbsp;Track&nbsp;1 &nbsp;·&nbsp; MAX AUDIO FX</span></div>
@@ -485,6 +492,25 @@
 /* ---------- mount both bodies, one loop ---------- */
 var api = Chassis.mount(document.getElementById('phone'), DLNY.delaunay, 'phone');
 Chassis.mount(document.getElementById('rack'), DLNY.delaunay, 'rack');
+
+/* ---------- scale the fixed 390x844 phone body to fit the real viewport ----------
+   Same fix as prototypes/wfc_chassis.html: 390x844 is a mockup size, not
+   something that reflows, and plenty of real phones are narrower or shorter
+   than that once browser chrome is subtracted. */
+function fitPhone() {
+  var phone = document.getElementById('phone'), mount = phone.parentElement;
+  var pad = 24, vw = window.innerWidth, vh = window.innerHeight;
+  phone.style.transform = 'scale(1)'; mount.style.height = '844px';
+  var top = mount.getBoundingClientRect().top;
+  var availH = vh - top - 16;
+  var scale = Math.min(1, (vw - pad) / 390, availH / 844);
+  scale = Math.max(0.35, scale);
+  phone.style.transform = 'scale(' + scale.toFixed(4) + ')';
+  mount.style.height = Math.ceil(844 * scale) + 'px';
+}
+window.addEventListener('resize', fitPhone);
+window.addEventListener('orientationchange', fitPhone);
+fitPhone();
 
 var t0 = performance.now();
 (function loop(t) {
