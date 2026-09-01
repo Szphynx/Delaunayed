@@ -1,0 +1,449 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>WFC 3D — collapse visualizer</title>
+<style>
+  :root{--bg:#0a0a0a;--panel:#101010;--ink:#eaeaea;--mut:#6d6d6d;--acc:#ff2a2a;--line:#2a2a2a}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'JetBrains Mono','IBM Plex Mono','SF Mono',ui-monospace,Menlo,monospace;
+       display:flex;flex-direction:column;align-items:center;padding:16px;gap:12px}
+  h1{font-size:13px;text-transform:uppercase;letter-spacing:.22em;color:var(--mut);font-weight:700;margin:0}
+  h1 b{color:var(--ink)}
+  .wrap{display:flex;gap:16px;flex-wrap:wrap;justify-content:center;align-items:flex-start;width:100%;max-width:1100px}
+
+  .scene{width:720px;max-width:92vw;height:460px;background:radial-gradient(120% 90% at 50% -10%,#141414 0,#080808 65%);
+         border:1px solid #2e2e2e;perspective:1000px;overflow:hidden;position:relative;cursor:grab;touch-action:none}
+  .scene:active{cursor:grabbing}
+  #stage{position:absolute;left:50%;top:50%;width:0;height:0;transform-style:preserve-3d;
+         transform:rotateX(-24deg) rotateY(-30deg)}
+  .cube{position:absolute;transform-style:preserve-3d;left:0;top:0}
+  .face{position:absolute;left:0;top:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.55)}
+  .particle{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none;mix-blend-mode:screen}
+  .hint{position:absolute;left:8px;bottom:6px;font-size:10px;color:#555;letter-spacing:.05em;text-transform:uppercase;pointer-events:none}
+
+  .panel{background:var(--panel);border:1px solid #2e2e2e;padding:16px 18px;width:260px;flex:0 0 auto}
+  h2{font-size:11px;text-transform:uppercase;letter-spacing:.24em;color:var(--mut);font-weight:700;
+     margin:18px 0 10px;border-bottom:1px solid #232323;padding-bottom:8px}
+  h2:first-child{margin-top:0}
+  .row{display:flex;align-items:center;gap:10px;margin:9px 0;font-size:12px}
+  .row label{flex:0 0 78px;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;font-size:11px}
+  input[type=range]{flex:1;accent-color:var(--ink)}
+  .val{flex:0 0 40px;text-align:right;font-variant-numeric:tabular-nums}
+  .btns{display:flex;gap:7px;flex-wrap:wrap}
+  button{background:transparent;color:var(--ink);border:1px solid #444;padding:8px 10px;font-size:12px;cursor:pointer;
+         font-weight:700;font-family:inherit;text-transform:uppercase;letter-spacing:.06em}
+  button:hover{background:#161616}
+  button.on{background:var(--ink);color:#000;border-color:var(--ink)}
+  .legend{display:flex;flex-direction:column;gap:5px;font-size:11px}
+  .legend .sw{display:inline-block;width:10px;height:10px;margin-right:7px;border:1px solid #0008;vertical-align:-1px}
+  .read{font-size:11px;color:var(--mut);line-height:1.7;margin-top:12px;text-transform:uppercase;letter-spacing:.03em}
+  .read b{color:var(--acc)}
+  .note{font-size:10.5px;color:#666;line-height:1.6;margin-top:10px}
+</style>
+</head>
+<body>
+
+<h1>WFC 3D — <b>collapse</b> visualizer</h1>
+
+<div class="wrap">
+  <div class="scene" id="scene">
+    <div id="stage"></div>
+    <div class="hint">drag to orbit</div>
+  </div>
+
+  <div class="panel">
+    <h2>Transport</h2>
+    <div class="btns">
+      <button id="play">▶ Play</button>
+      <button id="collapse">⟐ Collapse</button>
+    </div>
+    <div class="row"><label>Roll amt</label><input id="rollAmt" type="range" min="0" max="100" value="40"><span class="val" id="rollAmtV">40%</span></div>
+    <div class="btns"><button id="roll">↻ Roll</button></div>
+
+    <h2>Grid</h2>
+    <div class="row"><label>Steps</label><input id="cols" type="range" min="8" max="24" value="16"><span class="val" id="colsV">16</span></div>
+    <div class="row"><label>Lanes</label><input id="lanes" type="range" min="3" max="8" value="6"><span class="val" id="lanesV">6</span></div>
+    <div class="row"><label>Tempo</label><input id="bpm" type="range" min="60" max="200" value="132"><span class="val" id="bpmV">132</span></div>
+
+    <h2>Feedback (depth)</h2>
+    <div class="row"><label>Send</label><input id="fb" type="range" min="0" max="90" value="34"><span class="val" id="fbV">34%</span></div>
+    <p class="note">Push into <b>Z</b> = feedback send. Junction (fb-junc) blocks ride it hardest and their audio pans/attenuates with real distance in 3D space — that's the "far".</p>
+
+    <h2>Legend</h2>
+    <div class="legend" id="legend"></div>
+    <div class="read" id="readout"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* Mirrors DLNY.wfc's tile set / grid model (ui/effects/wfc.js) so this view
+   stays a faithful picture of the real feature, not a reinterpretation. */
+var TILES = [
+  { k:'silent',   c:'#151a24', label:'rest'    },
+  { k:'rise',     c:'#5ad1c8', label:'rise'    },
+  { k:'sustain',  c:'#f2a65a', label:'sustain' },
+  { k:'fall',     c:'#c86bfa', label:'fall'    },
+  { k:'accent',   c:'#ff2a2a', label:'accent'  },
+  { k:'junction', c:'#4af626', label:'fb junc' }
+];
+var JUNCTION = 5;
+var SCALE = [261.6,293.7,329.6,392.0,440.0,523.3,587.3,659.3]; // pentatonic-ish, per lane
+
+var ST = { cols:16, lanes:6, cells:[], lanesMeta:[], fb:34, bpm:132, play:false, playCol:-1, rollAmt:40 };
+
+function reseed() {
+  ST.cells = [];
+  for (var i = 0; i < ST.cols * ST.lanes; i++) {
+    ST.cells.push(Math.random() < 0.52 ? 0 : 1 + Math.floor(Math.random() * (TILES.length - 1)));
+  }
+  ST.lanesMeta = [];
+  for (var l = 0; l < ST.lanes; l++) {
+    ST.lanesMeta.push({ vol: 60 + Math.round(Math.random() * 40), mute:false, solo:false });
+  }
+}
+function at(c,l){ return ST.cells[l*ST.cols+c]; }
+function laneAudible(l){
+  var meta = ST.lanesMeta[l]; if (!meta) return true;
+  var soloed = ST.lanesMeta.some(function(m){ return m.solo; });
+  return !(meta.mute || (soloed && !meta.solo));
+}
+// Per-block luminance: lane's own volume fader, dimmed when the block itself
+// is a rest, boosted momentarily as the playhead lands on it.
+function blockLevel(c,l){
+  var meta = ST.lanesMeta[l]; if (!meta) return 0.05;
+  if (!laneAudible(l)) return 0.05;
+  var live = at(c,l) !== 0 ? 1 : 0.16;
+  var pulse = (c === ST.playCol) ? 0.55 : 0;
+  return Math.min(1.35, live * (meta.vol/100) + pulse);
+}
+
+/* ---------------- 3D stage ---------------- */
+var stage = document.getElementById('stage');
+var SP = 46, SIZE = 34, HALF = SIZE/2;
+var cubes = []; // {el, faces[], col, lane}
+
+function faceDiv(w,h,transform,color){
+  var f = document.createElement('div');
+  f.className = 'face';
+  f.style.width = w+'px'; f.style.height = h+'px';
+  f.style.transform = transform;
+  f.style.background = color;
+  return f;
+}
+function buildCube(color){
+  var cube = document.createElement('div');
+  cube.className = 'cube';
+  cube.style.width = SIZE+'px'; cube.style.height = SIZE+'px';
+  var faces = [
+    faceDiv(SIZE,SIZE,'translateZ('+HALF+'px)', color),
+    faceDiv(SIZE,SIZE,'rotateY(180deg) translateZ('+HALF+'px)', color),
+    faceDiv(SIZE,SIZE,'rotateY(90deg) translateZ('+HALF+'px)', color),
+    faceDiv(SIZE,SIZE,'rotateY(-90deg) translateZ('+HALF+'px)', color),
+    faceDiv(SIZE,SIZE,'rotateX(90deg) translateZ('+HALF+'px)', color),
+    faceDiv(SIZE,SIZE,'rotateX(-90deg) translateZ('+HALF+'px)', color)
+  ];
+  faces.forEach(function(f){ cube.appendChild(f); });
+  return { el: cube, faces: faces };
+}
+
+function depthFor(col, lane){
+  var t = at(col, lane);
+  var fbPush = (ST.fb/90) * 240;
+  var extra = t === JUNCTION ? fbPush * 1.5 : (t !== 0 ? fbPush * 0.3 : 0);
+  return -30 - extra;
+}
+function cubePos(col, lane){
+  var originX = -((ST.cols-1)*SP)/2, originY = -((ST.lanes-1)*SP)/2;
+  return { x: originX + col*SP, y: originY + lane*SP, z: depthFor(col,lane) };
+}
+function placeCube(c, x, y, z, s){
+  s = s === undefined ? 1 : s;
+  c.el.style.transform = 'translate3d('+(x-HALF)+'px,'+(y-HALF)+'px,'+z+'px) scale('+s+')';
+}
+function paintCube(c, col, lane){
+  var t = TILES[at(col,lane)] || TILES[0];
+  var lvl = blockLevel(col, lane);
+  c.el.style.filter = 'brightness(' + (0.35 + lvl*1.05).toFixed(2) + ')';
+  var glow = at(col,lane) !== 0 ? Math.min(18, 4 + lvl*12) : 0;
+  c.el.style.boxShadow = glow ? ('0 0 '+glow+'px '+t.c) : 'none';
+  c.faces.forEach(function(f){ f.style.background = t.c; });
+}
+
+function rebuildGrid(){
+  stage.innerHTML = '';
+  cubes = [];
+  var originX = -((ST.cols-1)*SP)/2, originY = -((ST.lanes-1)*SP)/2;
+  for (var l = 0; l < ST.lanes; l++) {
+    for (var col = 0; col < ST.cols; col++) {
+      var cube = buildCube((TILES[at(col,l)]||TILES[0]).c);
+      cube.col = col; cube.lane = l;
+      var x = originX + col*SP, y = originY + l*SP;
+      placeCube(cube, x, y, depthFor(col,l), 1);
+      paintCube(cube, col, l);
+      stage.appendChild(cube.el);
+      cubes.push(cube);
+    }
+  }
+}
+
+function refreshVisual(){
+  var originX = -((ST.cols-1)*SP)/2, originY = -((ST.lanes-1)*SP)/2;
+  cubes.forEach(function(c){
+    var x = originX + c.col*SP, y = originY + c.lane*SP;
+    placeCube(c, x, y, depthFor(c.col,c.lane), c._scale === undefined ? 1 : c._scale);
+    paintCube(c, c.col, c.lane);
+  });
+}
+
+/* Diff-driven creation/destruction: cells that changed shrink out, then the
+   new tile grows back in — staggered by distance from grid center so a
+   Collapse reads as one wave, not a flicker. */
+function collapseWith(mutate){
+  var prev = ST.cells.slice();
+  mutate();
+  var cx = (ST.cols-1)/2, cy = (ST.lanes-1)/2;
+  cubes.forEach(function(c, i){
+    if (prev[i] === ST.cells[i]) { paintCube(c, c.col, c.lane); return; }
+    var d = Math.hypot(c.col-cx, c.lane-cy);
+    var delay = d * 14;
+    c._scale = 1;
+    setTimeout(function(){
+      animScale(c, 1, 0, 130, function(){
+        paintCube(c, c.col, c.lane);
+        animScale(c, 0, 1, 190, null);
+      });
+    }, delay);
+  });
+}
+function animScale(c, from, to, dur, done){
+  var t0 = performance.now();
+  c._scale = from;
+  (function step(now){
+    var p = Math.min(1, (now - t0) / dur);
+    c._scale = from + (to - from) * p;
+    if (p < 1) requestAnimationFrame(step);
+    else if (done) done();
+  })(t0);
+}
+
+/* ---------------- waveform-out: reads audio, owns none of it ----------------
+   Every fired voice hands this module an AnalyserNode tap plus its own 3D
+   position and color. This module only reads samples off that tap and turns
+   them into a rising trail of particles — it never builds oscillators, gain
+   envelopes, panners, or touches the synth graph. Sound is made in the audio
+   section below; this just shows it happening, from wherever it happened. */
+var WaveOut = (function(){
+  var voices = [];   // {analyser, buf, pos, color, until, lastSpawn}
+  var particles = []; // {el, x, y, z, wig, born, life}
+
+  function watch(analyser, pos, color, durSeconds){
+    voices.push({ analyser: analyser, buf: new Uint8Array(analyser.fftSize),
+                   pos: pos, color: color, until: performance.now() + durSeconds*1000, lastSpawn: 0 });
+  }
+
+  function spawn(pos, color, norm, mag){
+    var el = document.createElement('div');
+    el.className = 'particle';
+    var size = 3 + mag*11;
+    el.style.width = size+'px'; el.style.height = size+'px';
+    el.style.background = color;
+    el.style.boxShadow = '0 0 ' + (4+mag*16) + 'px ' + color;
+    stage.appendChild(el);
+    particles.push({ el: el, x: pos.x, y: pos.y - HALF - 4, z: pos.z,
+                      wig: norm*20, born: performance.now(), life: 620 + mag*260 });
+  }
+
+  function update(now){
+    var i;
+    for (i = voices.length-1; i >= 0; i--) {
+      var v = voices[i];
+      if (now > v.until) { voices.splice(i,1); continue; }
+      if (now - v.lastSpawn < 16) continue;
+      v.lastSpawn = now;
+      v.analyser.getByteTimeDomainData(v.buf);
+      var mid = v.buf[Math.floor(v.buf.length/2)], peak = 0, k;
+      for (k = 0; k < v.buf.length; k++) { var d = Math.abs(v.buf[k]-128)/128; if (d > peak) peak = d; }
+      spawn(v.pos, v.color, (mid-128)/128, peak);
+    }
+    for (i = particles.length-1; i >= 0; i--) {
+      var p = particles[i], age = now - p.born, t = age/p.life;
+      if (t >= 1) { p.el.remove(); particles.splice(i,1); continue; }
+      var x = p.x + p.wig*(1-t*0.4), y = p.y - t*76, z = p.z + t*95;
+      p.el.style.opacity = (1-t).toFixed(2);
+      p.el.style.transform = 'translate3d('+(x-HALF/2)+'px,'+(y-HALF/2)+'px,'+z+'px)';
+    }
+  }
+
+  return { watch: watch, update: update };
+})();
+
+/* ---------------- audio: 3D-panned synth voices ---------------- */
+var actx = null, listener = null, master = null;
+function ensureAudio(){
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    listener = actx.listener;
+    if (listener.positionZ) { listener.positionX.value=0; listener.positionY.value=0; listener.positionZ.value=0; }
+    if (listener.forwardZ) { listener.forwardX.value=0; listener.forwardY.value=0; listener.forwardZ.value=-1;
+                              listener.upX.value=0; listener.upY.value=1; listener.upZ.value=0; }
+    else if (listener.setOrientation) listener.setOrientation(0,0,-1, 0,1,0);
+    master = actx.createGain(); master.gain.value = 0.5; master.connect(actx.destination);
+  }
+  // iOS Safari suspends the context until a user gesture explicitly resumes
+  // it, and re-suspends on backgrounding/mute-switch toggles — resume every
+  // time a gesture calls in, not just on first creation.
+  if (actx.state === 'suspended') actx.resume();
+  // Old WebKit only unlocks the audio pipeline once a buffer has actually
+  // been played inside the gesture; a silent one-sample buffer does it.
+  var b = actx.createBuffer(1, 1, actx.sampleRate);
+  var src = actx.createBufferSource(); src.buffer = b; src.connect(actx.destination); src.start(0);
+}
+function panFor(col, lane){
+  var originX = -((ST.cols-1)*SP)/2, originY = -((ST.lanes-1)*SP)/2;
+  var x = (originX + col*SP)/26, y = -(originY + lane*SP)/26, z = depthFor(col,lane)/26;
+  var p = actx.createPanner();
+  p.panningModel = 'equalpower'; p.distanceModel = 'inverse';
+  p.refDistance = 1; p.maxDistance = 40; p.rolloffFactor = 1.1;
+  if (p.positionX) { p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; }
+  else p.setPosition(x, y, z);
+  return p;
+}
+function triggerVoice(col, lane){
+  ensureAudio();
+  var tile = at(col, lane); if (!tile || !laneAudible(lane)) return;
+  var meta = ST.lanesMeta[lane];
+  var freq = SCALE[lane % SCALE.length];
+  var g = actx.createGain(); g.gain.value = 0;
+  var pan = panFor(col, lane);
+  var out = actx.createGain(); out.gain.value = 1;   // tap point for WaveOut, ahead of the panner
+  var analyser = actx.createAnalyser(); analyser.fftSize = 64;
+  out.connect(pan); out.connect(analyser); pan.connect(master);
+  var pos = cubePos(col, lane), color = TILES[tile].c;
+  var t = actx.currentTime, amp = 0.22 * (meta.vol/100);
+
+  if (tile === JUNCTION) {
+    var osc = actx.createOscillator(); osc.type = 'triangle'; osc.frequency.value = freq*1.5;
+    var delay = actx.createDelay(1.0); delay.delayTime.value = 0.16;
+    var fbGain = actx.createGain(); fbGain.gain.value = Math.min(0.85, ST.fb/100);
+    osc.connect(g); g.connect(delay); delay.connect(fbGain); fbGain.connect(delay);
+    delay.connect(out); g.connect(out);
+    g.gain.linearRampToValueAtTime(amp, t+0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
+    osc.start(t); osc.stop(t+1.4);
+    WaveOut.watch(analyser, pos, color, 1.3);
+    return;
+  }
+
+  var osc = actx.createOscillator();
+  osc.type = tile === 4 ? 'square' : 'sine'; // accent = square, else sine
+  var f0 = freq, f1 = freq;
+  if (tile === 1) { f0 = freq*0.6; f1 = freq; }       // rise: glide up
+  if (tile === 3) { f0 = freq*1.5; f1 = freq*0.75; }  // fall: glide down
+  osc.frequency.setValueAtTime(f0, t);
+  osc.frequency.linearRampToValueAtTime(f1, t + (tile===2 ? 0.3 : 0.14));
+  osc.connect(g); g.connect(out);
+  var dur = tile === 2 ? 0.42 : (tile === 4 ? 0.09 : 0.16); // sustain longest, accent shortest
+  g.gain.linearRampToValueAtTime(amp * (tile===4 ? 1.4 : 1), t+0.008);
+  g.gain.exponentialRampToValueAtTime(0.001, t+dur);
+  osc.start(t); osc.stop(t+dur+0.05);
+  WaveOut.watch(analyser, pos, color, dur + 0.05);
+}
+
+/* ---------------- transport tick ---------------- */
+var playT0 = 0, playAcc = 0;
+function tick(now){
+  if (ST.play) {
+    var seconds = playAcc + (now - playT0)/1000;
+    var col = Math.floor(seconds * (ST.bpm/60) * 4) % ST.cols;
+    if (col !== ST.playCol) {
+      ST.playCol = col;
+      for (var l = 0; l < ST.lanes; l++) if (at(col,l) !== 0) triggerVoice(col,l);
+    }
+  }
+  refreshVisual();
+  WaveOut.update(now);
+  updateReadout();
+  requestAnimationFrame(tick);
+}
+requestAnimationFrame(tick);
+
+function updateReadout(){
+  document.getElementById('readout').innerHTML =
+    'step <b>' + (ST.playCol<0?'-':ST.playCol) + '/' + ST.cols + '</b> · ' +
+    ST.lanes + ' lanes · fb <b>' + ST.fb + '%</b> · ' + ST.bpm + ' bpm';
+}
+
+/* ---------------- orbit drag ---------------- */
+var scene = document.getElementById('scene');
+var rotX = -24, rotY = -30, dragging = false, lastX = 0, lastY = 0;
+scene.addEventListener('pointerdown', function(e){ dragging = true; lastX = e.clientX; lastY = e.clientY; scene.setPointerCapture(e.pointerId); });
+scene.addEventListener('pointerup', function(){ dragging = false; });
+scene.addEventListener('pointermove', function(e){
+  if (!dragging) return;
+  rotY += (e.clientX - lastX) * 0.4;
+  rotX -= (e.clientY - lastY) * 0.4;
+  rotX = Math.max(-80, Math.min(80, rotX));
+  lastX = e.clientX; lastY = e.clientY;
+  stage.style.transform = 'rotateX('+rotX+'deg) rotateY('+rotY+'deg)';
+});
+
+/* ---------------- controls ---------------- */
+function bindRange(id, valId, key, fmt){
+  var el = document.getElementById(id), v = document.getElementById(valId);
+  el.addEventListener('input', function(){
+    ST[key] = +el.value;
+    v.textContent = fmt ? fmt(ST[key]) : ST[key];
+  });
+}
+bindRange('fb','fbV','fb', function(n){ return n+'%'; });
+bindRange('bpm','bpmV','bpm');
+bindRange('rollAmt','rollAmtV','rollAmt', function(n){ return n+'%'; });
+
+document.getElementById('cols').addEventListener('change', function(e){
+  ST.cols = +e.target.value; document.getElementById('colsV').textContent = ST.cols;
+  reseed(); rebuildGrid();
+});
+document.getElementById('lanes').addEventListener('change', function(e){
+  ST.lanes = +e.target.value; document.getElementById('lanesV').textContent = ST.lanes;
+  reseed(); rebuildGrid();
+});
+
+document.getElementById('play').addEventListener('click', function(){
+  ensureAudio();
+  ST.play = !ST.play;
+  this.classList.toggle('on', ST.play);
+  this.textContent = ST.play ? '❚❚ Pause' : '▶ Play';
+  if (ST.play) playT0 = performance.now(); else playAcc += (performance.now()-playT0)/1000;
+});
+document.getElementById('collapse').addEventListener('click', function(){
+  collapseWith(reseed);
+});
+document.getElementById('roll').addEventListener('click', function(){
+  collapseWith(function(){
+    for (var i = 0; i < ST.cells.length; i++) {
+      if (Math.random()*100 >= ST.rollAmt) continue;
+      ST.cells[i] = Math.random() < 0.52 ? 0 : 1 + Math.floor(Math.random() * (TILES.length - 1));
+    }
+  });
+});
+
+/* ---------------- legend ---------------- */
+(function(){
+  var box = document.getElementById('legend');
+  TILES.forEach(function(t){
+    var row = document.createElement('div');
+    row.innerHTML = '<span class="sw" style="background:'+t.c+'"></span>' + t.label;
+    box.appendChild(row);
+  });
+})();
+
+reseed();
+rebuildGrid();
+</script>
+</body>
+</html>
