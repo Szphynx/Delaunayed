@@ -218,6 +218,7 @@ var DLNY_AUDIO = (function () {
     master.dry.gain.value = S.on ? S.dry / 100 : 1;
     master.wet.gain.value = S.on ? S.wet / 100 : 0;
     master.tone.frequency.value = S.tone;
+    master.out.gain.value = S.master / 100;
     if (S.play && !srcNode) start();
     if (!S.play && srcNode) stop();
   }

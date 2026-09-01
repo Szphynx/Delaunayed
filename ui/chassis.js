@@ -155,7 +155,38 @@ var Chassis = (function () {
   }
 
   /* ---------- one control row ---------- */
+  // A dropdown menu, not a slider: for a choice with no meaningful "between"
+  // (a preset, a named mode) rather than a value on a range. `c.groups` is
+  // [{label, options:[{value,label}]}] — one <optgroup> per group, e.g. a
+  // Factory Presets / User Presets split. `c.options` (flat) works too when
+  // there is only one group. Always commits like a structural control: there
+  // is no drag to protect, only a single discrete pick.
+  function selectRow(c, api) {
+    var row = el('div', 'ctl select');
+    var lb = el('label', null, c.label);
+    var sel = el('select');
+    sel.setAttribute('aria-label', c.label);
+    (c.groups || [{ options: c.options }]).forEach(function (g) {
+      var host = sel;
+      if (g.label) { host = el('optgroup'); host.label = g.label; sel.appendChild(host); }
+      (g.options || []).forEach(function (o) {
+        var opt = el('option', null, o.label);
+        opt.value = o.value;
+        host.appendChild(opt);
+      });
+    });
+    sel.value = c.obj[c.key];
+    sel.onchange = function () {
+      c.obj[c.key] = +sel.value;
+      if (c.onInput) c.onInput(sel.value, api);
+      api.render();
+    };
+    row.append(lb, sel);
+    return row;
+  }
+
   function controlRow(c, api, onLabelChange) {
+    if (c.type === 'select') return selectRow(c, api);
     var row = el('div', 'ctl');
     var lb = el('label', null, c.label);
     var r = el('input');

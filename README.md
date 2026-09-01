@@ -153,7 +153,7 @@ spec in ways worth naming rather than quietly overwriting:
 &nbsp;·&nbsp; [`k_hirajoshi`](assets/audio/06_lsystem_k_hirajoshi.wav)
 &nbsp;·&nbsp; [`z_flat_control`](assets/audio/06_lsystem_z_flat_control.wav)
 &nbsp;·&nbsp; sketch: [`prototypes/lsystem_tree_delay.py`](prototypes/lsystem_tree_delay.py)
-&nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/lsystem_chassis.html`](prototypes/lsystem_chassis.html) — one WebAudio voice per node, wind field, presets, and a Rhodes to play it with
+&nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/lsystem_chassis.html`](prototypes/lsystem_chassis.html) — one WebAudio voice per node, wind field, a factory/user preset menu, a master volume, and a Rhodes to play it with
 
 - **Math:** The turtle interpretation of the L-system *is* the delay graph. A segment is a
   delay node (time, gain, pitch, pan, darkening); a child node reads its **parent's output**,

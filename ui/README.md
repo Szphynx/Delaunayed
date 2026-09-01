@@ -17,7 +17,7 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 | `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS, and decodes AIFF/AIFC, which only Safari takes natively. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
 | `effects/delaunay.js` | Engine A of `prototypes/delaunay_delay.html`, as a spec. |
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
-| `effects/lsystem.js` | The L-system branching delay tree, as a spec. Five pages: TREE, TIME, KEY, WIND, MIX. |
+| `effects/lsystem.js` | The L-system branching delay tree, as a spec. Five pages: TREE, TIME, KEY, WIND, OUT. |
 | `lsystem.js` | `LSystem.grow(params, wind)` — the tree itself. Pure, no DOM, no audio. `node ui/test_lsystem.js`. |
 | `index.html` | Host page and effect picker. Copy it to start a new device. |
 | *(consumer)* | [`../prototypes/delaunay_chassis.html`](../prototypes/delaunay_chassis.html) — the same spec with a real WebAudio engine attached. |
@@ -107,6 +107,20 @@ var DLNY = window.DLNY || (window.DLNY = {});
 `Chassis.fmt` has `raw`, `pct`, `ms`, `db`, `hz` (1000 → `1.0k`), `pan` (0 → `C`,
 −40 → `L40`), and `list(array)` for sliders that step through labels — note divisions,
 tile names, scale degrees.
+
+### A dropdown instead of a slider
+
+Give a control `type: 'select'` and it renders as a native `<select>` instead of a
+range — for a choice with no meaningful "between" (a preset, a named mode), where
+stepping through with a slider makes you scrub past everything in between to reach
+the one you want. `groups: [{label, options: [{value, label}]}]` renders one
+`<optgroup>` per group (`effects/lsystem.js`'s Preset control uses this for Factory
+Presets vs. User Presets); a flat `options: [{value, label}]` works when there's only
+one group. It always commits on change — there's no drag to protect the way a range
+control's `commit: 'change'` protects one — so `onInput` fires immediately. Still
+excluded from the dice for free: `randomizable()`'s numeric-range check
+(`+c.max > +c.min`) already skips it without a select-specific case, since a select
+has no `min`/`max`.
 
 ---
 
@@ -247,6 +261,11 @@ them and the rest is the patch.
   in flight and what has just fired at time t". The animation draws from it, and the
   engine can call the same function to know which voices are sounding. That's why the
   timing lives there and not in the render loop. `node ui/test_tree_travel.js` covers it.
+- **`ponytail:`** User presets save to `localStorage` under `dlny.lsystem.userPresets` —
+  no accounts, no server, no export/import. They live in this browser only, and a
+  private window or cleared site data loses them. Naming is a bare `window.prompt`,
+  and there's no delete; both are one line each to add if a real preset library ever
+  needs them.
 - **`ponytail:`** `rhodes.js` is two oscillators, two gains and a lowpass per note — a carrier
   at the note and a modulator 14× above it whose depth dies in ~120 ms, which is the tine.
   Velocity drives the modulation index, not just level, so digging in gets *brighter*. No

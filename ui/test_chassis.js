@@ -11,14 +11,18 @@
 const assert = require('assert');
 const path = require('path');
 
-global.window = {};
+global.window = { localStorage: { getItem: () => null, setItem: () => {} } };
 global.Chassis = require('./chassis.js');
 require('./effects/delaunay.js');
 require('./effects/wfc.js');
+global.LSystem = require('./lsystem.js');
+global.TreeTravel = require('./tree-travel.js');
+require('./effects/lsystem.js');
 
 const { fmt, pad } = global.Chassis;
 const D = global.window.DLNY.delaunay;
 const W = global.window.DLNY.wfc;
+const L = global.window.DLNY.lsystem;
 let n = 0;
 const check = (name, fn) => { fn(); n++; process.stdout.write('  ok  ' + name + '\n'); };
 
@@ -42,7 +46,7 @@ check('fmt.list maps index to label, passes through out of range', () => {
 check('pad', () => { assert.strictEqual(pad(3), '03'); assert.strictEqual(pad(12), '12'); });
 
 /* ---------- spec shape: every tab must resolve to a page ---------- */
-for (const [label, spec] of [['delaunay', D], ['wfc', W]]) {
+for (const [label, spec] of [['delaunay', D], ['wfc', W], ['lsystem', L]]) {
   check(label + ': every tab has a page', () => {
     spec.tabs.forEach(t => assert.ok(spec.pages[t], 'no page for tab ' + t));
   });
@@ -340,7 +344,7 @@ function fakeDom() {
 
 check('mount(): both variants of both effects assemble without throwing', () => {
   const mk = fakeDom();
-  for (const [label, spec] of [['delaunay', D], ['wfc', W]]) {
+  for (const [label, spec] of [['delaunay', D], ['wfc', W], ['lsystem', L]]) {
     for (const variant of ['phone', 'rack']) {
       const host = mk('div');
       const api = global.Chassis.mount(host, spec, variant);

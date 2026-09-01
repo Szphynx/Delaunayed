@@ -75,10 +75,22 @@
   background:linear-gradient(90deg,var(--acc) var(--p),var(--line2) var(--p))}
 .dlny input[type=range]::-moz-range-track{height:2px;
   background:linear-gradient(90deg,var(--acc) var(--p),var(--line2) var(--p))}
-.dlny input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:3px;height:16px;
-  background:var(--ink);margin-top:-7px;border-radius:0;border:0}
-.dlny input[type=range]::-moz-range-thumb{width:3px;height:16px;background:var(--ink);
+.dlny input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:5px;height:20px;
+  background:var(--ink);margin-top:-9px;border-radius:0;border:0}
+.dlny input[type=range]::-moz-range-thumb{width:5px;height:20px;background:var(--ink);
   border:0;border-radius:0}
+
+/* ---------- a select control (Chassis.mount's <select> rows) ----------
+   A discrete pick, not a value on a range — a preset menu, a named mode.
+   grid-column spans both cells: unlike a slider there is no value readout
+   beside it, the chosen option already says its own value. */
+.dlny .ctl.select{grid-template-columns:1fr!important}
+.dlny .ctl.select select{grid-column:1/-1;grid-row:2;width:100%;
+  background:var(--well);color:var(--ink);border:1px solid var(--line2);
+  font:inherit;font-family:var(--mono);font-size:11px;padding:4px 6px;
+  border-radius:1px;cursor:pointer}
+.dlny .pbody .ctl.select select{grid-row:2;height:34px;font-size:12px}
+.dlny .ctl.select select:hover{border-color:var(--acc)}
 
 /* ---------- level strips (Chassis.strips) ---------- */
 .dlny .strips{display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
@@ -165,11 +177,12 @@
 .dlny .pbody .ctl label{grid-column:1;font-size:11px;letter-spacing:.1em}
 .dlny .pbody .ctl .v{grid-column:2;font-size:13px;font-weight:500}
 .dlny .pbody .ctl input{grid-column:1/3;grid-row:2;height:30px}
-/* touch targets: 26px thumb, ~59px effective row */
-.dlny .pbody input[type=range]::-webkit-slider-runnable-track{height:3px}
-.dlny .pbody input[type=range]::-moz-range-track{height:3px}
-.dlny .pbody input[type=range]::-webkit-slider-thumb{width:5px;height:26px;margin-top:-12px}
-.dlny .pbody input[type=range]::-moz-range-thumb{width:5px;height:26px}
+/* touch targets: bumped from 5x26 to 10x30 — grabbable with a thumb, not
+   just a fingertip, and still clear of the label/value row above it. */
+.dlny .pbody input[type=range]::-webkit-slider-runnable-track{height:4px}
+.dlny .pbody input[type=range]::-moz-range-track{height:4px}
+.dlny .pbody input[type=range]::-webkit-slider-thumb{width:10px;height:30px;margin-top:-13px;border-radius:1px}
+.dlny .pbody input[type=range]::-moz-range-thumb{width:10px;height:30px;border-radius:1px}
 .dlny .pbody .strip .fad::-webkit-slider-thumb{width:14px;height:5px;margin-top:-1px}
 .dlny .pbody .strip .fad::-moz-range-thumb{width:14px;height:5px}
 .dlny .pbody .strips{flex:1;min-height:0;align-items:stretch;padding:4px 0}
