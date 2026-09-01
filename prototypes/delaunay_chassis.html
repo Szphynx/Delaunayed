@@ -78,7 +78,7 @@
     <h2>Source — drop an audio file anywhere on this page</h2>
     <canvas id="srcwave" width="1100" height="64"></canvas>
     <div class="srcbtns">
-      <label>Load file<input type="file" id="file" accept="audio/*" hidden/></label>
+      <label>Load file<input type="file" id="file" accept="audio/*,.aif,.aiff,.aifc,audio/aiff,audio/x-aiff" hidden/></label>
       <button id="mic">Audio in</button>
       <button id="loop" class="on">Loop</button>
       <span id="srcname">—</span>
@@ -390,7 +390,7 @@
     AudioSession.unlock(); ensureAC();
     f.arrayBuffer().then(function (a) { return AudioSession.decode(AC, a); })
       .then(function (b) { useBuffer(b, f.name); })
-      .catch(function () { nameEl.textContent = 'cannot decode ' + f.name + ' — try WAV/MP3/M4A'; });
+      .catch(function () { nameEl.textContent = 'cannot decode ' + f.name + ' — try WAV/AIFF/MP3/M4A'; });
   });
 
   document.getElementById('loop').addEventListener('click', function () {
@@ -429,7 +429,7 @@
     AudioSession.unlock(); ensureAC();
     f.arrayBuffer().then(function (a) { return AudioSession.decode(AC, a); })
       .then(function (b) { useBuffer(b, f.name); })
-      .catch(function () { nameEl.textContent = 'cannot decode ' + f.name + ' — try WAV/MP3/M4A'; });
+      .catch(function () { nameEl.textContent = 'cannot decode ' + f.name + ' — try WAV/AIFF/MP3/M4A'; });
   });
 
   // Browsers only allow an AudioContext to start inside a user gesture, and the

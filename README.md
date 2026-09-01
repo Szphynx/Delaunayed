@@ -189,7 +189,8 @@ open index.html
 **Source: your own audio, drag-and-drop, mic, waveform + transport.**
 The **Source** panel (above the mixer) shows the current sample's **waveform** with a moving
 **transport bar** and a `position / length` readout. **Drag & drop an audio file anywhere** on the
-page — or hit **Load file** — to decode it (WAV/MP3/etc. via `decodeAudioData`) and make it the
+page — or hit **Load file** — to decode it (WAV/MP3/M4A via `decodeAudioData`, plus AIFF/AIFC,
+which only Safari decodes natively and `ui/audio-session.js` unpacks everywhere else) and make it the
 looped source; the waveform redraws instantly. **Audio In** switches the source to the **microphone**
 (`getUserMedia`), which flows through the exact same graph — so Freeze can capture *live* input and
 the delay/FX process it in real time. (Mic needs a real browser + permission; it's blocked inside

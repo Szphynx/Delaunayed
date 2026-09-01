@@ -12,13 +12,14 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 |---|---|
 | `chassis.css` | All device chrome, both bodies. Scoped under `.dlny`, dark-only. |
 | `chassis.js` | `Chassis.mount(host, spec, 'phone'\|'rack')` + the reusable page bodies. |
-| `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
+| `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS, and decodes AIFF/AIFC, which only Safari takes natively. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
 | `effects/delaunay.js` | Engine A of `prototypes/delaunay_delay.html`, as a spec. |
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
 | `index.html` | Host page and effect picker. Copy it to start a new device. |
 | *(consumer)* | [`../prototypes/delaunay_chassis.html`](../prototypes/delaunay_chassis.html) — the same spec with a real WebAudio engine attached. |
 | *(consumer)* | [`../prototypes/wfc_chassis.html`](../prototypes/wfc_chassis.html) — `wfc` spec, phone body only, with a real WebAudio engine (grain capture + gated multitap) attached. |
 | `test_chassis.js` | `node ui/test_chassis.js` — 29 checks, no framework. |
+| `test_audio_session.js` | `node ui/test_audio_session.js` — 8 checks on the AIFF parser, no fixtures on disk. |
 
 Classic scripts, not ES modules: the prototypes open straight off disk by double-click
 and `file://` blocks module imports. There is no build step and no dependency.
