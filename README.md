@@ -153,6 +153,7 @@ spec in ways worth naming rather than quietly overwriting:
 &nbsp;·&nbsp; [`k_hirajoshi`](assets/audio/06_lsystem_k_hirajoshi.wav)
 &nbsp;·&nbsp; [`z_flat_control`](assets/audio/06_lsystem_z_flat_control.wav)
 &nbsp;·&nbsp; sketch: [`prototypes/lsystem_tree_delay.py`](prototypes/lsystem_tree_delay.py)
+&nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/lsystem_tree.html`](prototypes/lsystem_tree.html) — one WebAudio voice per node, wind field, preset menu
 
 - **Math:** The turtle interpretation of the L-system *is* the delay graph. A segment is a
   delay node (time, gain, pitch, pan, darkening); a child node reads its **parent's output**,
@@ -187,6 +188,12 @@ spec in ways worth naming rather than quietly overwriting:
   varispeed shifts a node's harmonics with it, and a 5th harmonic is a major third the scale may not contain.
 - **Control demo:** `z_flat_control` is the same node count with linear times and no
   inheritance — a plain multitap. It's the A/B that justifies the architecture.
+- **Wind:** a pulsing field (two slow sines plus a swelling gust) bends the tips more than the trunk, and
+  a child inherits its parent's bend, so gusts swing whole branches. Heading *is* pitch, so the tree
+  retunes as it moves — and because the key snap is on the accumulated pitch, that lands as discrete
+  in-key steps rather than a slide. The bent branch also stretches, dragging its delay time: that drag is
+  the chirp you hear on the way. One `LSystem.grow(params, wind)` call returns the bent geometry, the bent
+  pitches and the stretched times together, so the drawing and the audio can't disagree.
 - **Effort:** Low. Node list is control-rate; `poly~` of delay voices renders it.
 
 ---

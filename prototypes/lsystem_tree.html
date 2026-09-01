@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>L-System Branching Delay Tree — prototype</title>
+<style>
+  :root{
+    --bg:#061420; --panel:#0d2233; --well:#08192a; --line:#1b4160; --line2:#2c6c8c;
+    --ink:#dfeef6; --mut:#7fa3b8; --dim:#4f7d95;
+    --acc:#5fc0e4;          /* blue */
+    --teal:#4fd6c4;         /* teal */
+    --warm:#e0a458;         /* the one warm accent, for controls only */
+    --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,monospace;
+    --disp:'Helvetica Neue',Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--mono);font-size:12px;
+       display:flex;flex-direction:column;align-items:center;padding:14px;gap:12px}
+  .device{width:100%;max-width:1052px;border:1px solid var(--line);border-radius:5px;
+          background:#08192a;overflow:hidden}
+  .devbar{display:flex;align-items:center;gap:11px;height:30px;padding:0 12px;
+          background:#0b2135;border-bottom:1px solid var(--line)}
+  .power{width:13px;height:13px;border:1px solid var(--line2);border-radius:2px;background:transparent;cursor:pointer}
+  .power.on{background:var(--acc);border-color:var(--acc);box-shadow:0 0 6px rgba(95,192,228,.55)}
+  .devtitle{font-family:var(--disp);font-weight:900;letter-spacing:-.02em;text-transform:uppercase;font-size:15px}
+  .devtitle span{color:var(--acc)}
+  .devsub{font-family:Georgia,serif;font-style:italic;color:var(--mut);font-size:12px}
+  .devspace{flex:1}
+  .devmeta{color:var(--line2);letter-spacing:.16em;font-size:10px;text-transform:uppercase}
+  .devbody{padding:14px;display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+  .device.off .devbody{opacity:.4;filter:grayscale(.6)}
+
+  .stage{flex:1 1 520px;min-width:320px;display:flex;flex-direction:column;gap:8px}
+  .treewrap{background:var(--well);border:1px solid var(--line);position:relative}
+  #tree{width:100%;height:auto;display:block}
+  .tt-edge{stroke:#1b4160;stroke-width:1}
+  .tt-node{fill:#2c6c8c}
+  .tt-label{font-family:var(--mono);font-size:9px;fill:#9fc7da}
+  .readout{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:10.5px;
+           letter-spacing:.06em;padding:2px 2px 0}
+  .readout b{color:var(--ink);font-weight:400}
+
+  .panel{flex:0 0 288px;background:var(--panel);border:1px solid var(--line);padding:13px 14px;
+         display:flex;flex-direction:column;gap:11px}
+  h2{font-size:10px;text-transform:uppercase;letter-spacing:.22em;color:var(--mut);
+     font-weight:400;margin:0;border-bottom:1px solid var(--line);padding-bottom:6px}
+  .row{display:flex;align-items:center;gap:9px}
+  .row label{flex:0 0 84px;color:var(--mut);font-size:10.5px;letter-spacing:.05em}
+  .row input[type=range]{flex:1;accent-color:var(--acc);min-width:0}
+  .row .val{flex:0 0 52px;text-align:right;color:var(--teal);font-size:10.5px;font-variant-numeric:tabular-nums}
+  select,button{font:inherit;font-size:11px;background:var(--well);color:var(--ink);
+                border:1px solid var(--line2);padding:5px 9px;border-radius:2px;cursor:pointer}
+  select{width:100%}
+  button:hover{border-color:var(--acc);color:var(--acc)}
+  button.on{background:var(--acc);color:#08192a;border-color:var(--acc)}
+  .btns{display:flex;gap:7px;flex-wrap:wrap}
+  .hint{color:var(--mut);font-size:10px;line-height:1.5}
+  .windbar{height:4px;background:var(--well);border:1px solid var(--line);position:relative;overflow:hidden}
+  .windbar i{position:absolute;top:0;bottom:0;left:50%;width:2px;background:var(--teal)}
+  code{color:var(--warm)}
+</style>
+</head>
+<body>
+
+<div class="device" id="device">
+  <div class="devbar">
+    <div class="power on" id="power" title="bypass"></div>
+    <div class="devtitle">Branching <span>Delay Tree</span></div>
+    <div class="devsub">L-system</div>
+    <div class="devspace"></div>
+    <div class="devmeta" id="meta">— nodes</div>
+  </div>
+  <div class="devbody">
+
+    <div class="stage">
+      <div class="treewrap"><svg id="tree" viewBox="0 0 900 430" role="img"
+        aria-label="The delay tree, swaying in the wind field"></svg></div>
+      <div class="readout">
+        <span>wind <b id="rWind">0.00</b></span>
+        <span>bend <b id="rBend">0.0°</b></span>
+        <span>tip note <b id="rNote">—</b></span>
+        <span>span <b id="rSpan">0.00 s</b></span>
+        <span>voices <b id="rVoices">0</b></span>
+      </div>
+      <div class="windbar"><i id="windNeedle"></i></div>
+      <div class="btns">
+        <button id="play">Play</button>
+        <button id="loop" class="on">Loop</button>
+        <select id="src" style="width:auto">
+          <option value="../assets/audio/07_tonal_dry_Am.wav">Source: A minor drone</option>
+          <option value="../assets/audio/00_dry_source.wav">Source: marimba</option>
+          <option value="../assets/audio/amen_break_138bpm.wav">Source: amen break</option>
+        </select>
+        <input type="file" id="file" accept="audio/*" style="max-width:150px;color:var(--mut)"/>
+      </div>
+      <p class="hint" id="hint">Opened from disk, the built-in sources can't be fetched — drop a file in
+        instead, or serve the folder (<code>npx http-server</code>).</p>
+    </div>
+
+    <div class="panel">
+      <h2>Preset</h2>
+      <select id="preset"></select>
+
+      <h2>The rule</h2>
+      <div class="row"><label>Children</label><input type="range" id="branch" min="1" max="3" step="1"><span class="val" id="vbranch"></span></div>
+      <div class="row"><label>Angle</label><input type="range" id="angle" min="6" max="60" step="1"><span class="val" id="vangle"></span></div>
+      <div class="row"><label>Ratio</label><input type="range" id="ratio" min="0.4" max="0.98" step="0.01"><span class="val" id="vratio"></span></div>
+      <div class="row"><label>Decay</label><input type="range" id="decay" min="0.4" max="0.92" step="0.01"><span class="val" id="vdecay"></span></div>
+      <div class="row"><label>Depth</label><input type="range" id="maxDepth" min="1" max="5" step="1"><span class="val" id="vmaxDepth"></span></div>
+      <div class="row"><label>Trunk</label><input type="range" id="baseLen" min="0.05" max="0.7" step="0.01"><span class="val" id="vbaseLen"></span></div>
+      <p class="hint">Those six numbers <em>are</em> the L-system: children per node, the turn between
+        them, how much each generation shortens and quietens, how deep it goes.</p>
+
+      <h2>Key</h2>
+      <select id="key"></select>
+      <div class="row"><label>Root</label><input type="range" id="rootSemi" min="-12" max="12" step="1"><span class="val" id="vrootSemi"></span></div>
+      <div class="row"><label>Cents/deg</label><input type="range" id="centsPerDeg" min="2" max="24" step="1"><span class="val" id="vcentsPerDeg"></span></div>
+
+      <h2>Wind</h2>
+      <div class="row"><label>Amount</label><input type="range" id="windAmount" min="0" max="2" step="0.01"><span class="val" id="vwindAmount"></span></div>
+      <div class="row"><label>Rate</label><input type="range" id="windRate" min="0.02" max="1.2" step="0.01"><span class="val" id="vwindRate"></span></div>
+      <div class="row"><label>Gust</label><input type="range" id="gust" min="0" max="1" step="0.01"><span class="val" id="vgust"></span></div>
+      <p class="hint">Wind bends the tips more than the trunk. Heading is pitch, so the tree retunes as it
+        moves — the key snap makes that land as in-key steps, and the branch stretching drags its delay
+        time, which is the chirp you hear on the way.</p>
+
+      <h2>Output</h2>
+      <div class="row"><label>Dry</label><input type="range" id="dry" min="0" max="1" step="0.01"><span class="val" id="vdry"></span></div>
+      <div class="row"><label>Wet</label><input type="range" id="wet" min="0" max="1" step="0.01"><span class="val" id="vwet"></span></div>
+      <div class="row"><label>Tone</label><input type="range" id="tone" min="400" max="16000" step="100"><span class="val" id="vtone"></span></div>
+    </div>
+
+  </div>
+</div>
+
+<script src="../ui/lsystem.js"></script>
+<script src="../ui/tree-travel.js"></script>
+<script>
+/* ---------------------------------------------------------------------------
+   One WebAudio voice per tree node: delay -> lowpass -> pitch -> gain -> pan.
+   A voice reads its PARENT's output, so the graph is the tree and the delay
+   times compound on their own — no tap list anywhere.
+
+   ponytail: no feedback path. The tree is finite and self-pruning, so there is
+   nothing to run away, and it saves a knob nobody asked for. Add one on a leaf
+   if you want the tail to sustain.
+   --------------------------------------------------------------------------- */
+'use strict';
+var AC = null, master = null, voices = [], nodes = [], buffer = null, srcNode = null;
+var travel = null, playing = false, t0 = 0;
+
+var PRESETS = {
+  'Cathedral':      { key:'minor_pentatonic', angle:34, ratio:0.88, decay:0.82, baseLen:0.45, branch:2, maxDepth:4, windAmount:0.35, windRate:0.10, gust:0.5 },
+  'Drone Web':      { key:'natural_minor',    angle:20, ratio:0.95, decay:0.88, baseLen:0.50, branch:2, maxDepth:4, windAmount:0.6,  windRate:0.06, gust:0.7 },
+  'Koto Rain':      { key:'hirajoshi',        angle:26, ratio:0.70, decay:0.74, baseLen:0.22, branch:3, maxDepth:3, windAmount:0.5,  windRate:0.3,  gust:0.4 },
+  'Hijaz Veil':     { key:'hijaz',            angle:40, ratio:0.90, decay:0.80, baseLen:0.30, branch:2, maxDepth:4, windAmount:0.45, windRate:0.14, gust:0.6 },
+  'Fifths Ladder':  { key:'fifths',           angle:44, ratio:0.92, decay:0.84, baseLen:0.38, branch:2, maxDepth:4, windAmount:0.3,  windRate:0.09, gust:0.3 },
+  'Storm':          { key:'phrygian',         angle:30, ratio:0.86, decay:0.80, baseLen:0.35, branch:2, maxDepth:4, windAmount:1.6,  windRate:0.5,  gust:0.9 },
+  'Still Air':      { key:'minor_pentatonic', angle:34, ratio:0.88, decay:0.82, baseLen:0.45, branch:2, maxDepth:4, windAmount:0,    windRate:0.1,  gust:0 }
+};
+var P = Object.assign({ centsPerDeg:8, rootSemi:0, dry:0.7, wet:0.85, tone:6500 }, PRESETS['Cathedral']);
+
+/* ---------- controls ---------- */
+var SLIDERS = ['branch','angle','ratio','decay','maxDepth','baseLen','rootSemi','centsPerDeg',
+               'windAmount','windRate','gust','dry','wet','tone'];
+var FMT = { angle:function(v){return v+'°';}, tone:function(v){return v>=1000?(v/1000).toFixed(1)+'k':v;},
+            rootSemi:function(v){return (v>0?'+':'')+v;}, windRate:function(v){return v.toFixed(2)+' Hz';} };
+function paint() {
+  SLIDERS.forEach(function (k) {
+    var el = document.getElementById(k); el.value = P[k];
+    document.getElementById('v'+k).textContent = FMT[k] ? FMT[k](P[k]) : (
+      String(P[k]).length > 4 ? Number(P[k]).toFixed(2) : P[k]);
+  });
+  document.getElementById('key').value = P.key;
+}
+SLIDERS.forEach(function (k) {
+  document.getElementById(k).addEventListener('input', function (e) {
+    P[k] = parseFloat(e.target.value);
+    document.getElementById('v'+k).textContent = FMT[k] ? FMT[k](P[k]) : (
+      String(P[k]).length > 4 ? P[k].toFixed(2) : P[k]);
+    if (['dry','wet','tone'].indexOf(k) >= 0) writeOutput();
+    else if (['windAmount','windRate','gust'].indexOf(k) >= 0) { /* control loop picks it up */ }
+    else rebuild();
+  });
+});
+var keySel = document.getElementById('key');
+Object.keys(LSystem.KEYS).forEach(function (k) {
+  var o = document.createElement('option'); o.value = k;
+  o.textContent = k.replace(/_/g, ' '); keySel.appendChild(o);
+});
+keySel.addEventListener('change', function (e) { P.key = e.target.value; rebuild(); });
+var preSel = document.getElementById('preset');
+Object.keys(PRESETS).forEach(function (k) {
+  var o = document.createElement('option'); o.value = k; o.textContent = k; preSel.appendChild(o);
+});
+preSel.addEventListener('change', function (e) {
+  Object.assign(P, PRESETS[e.target.value]); paint(); rebuild();
+});
+
+/* ---------- audio graph ---------- */
+function ensureAC() {
+  if (AC) return;
+  AC = new (window.AudioContext || window.webkitAudioContext)();
+  master = { in: AC.createGain(), dry: AC.createGain(), wet: AC.createGain(),
+             tone: AC.createBiquadFilter(), out: AC.createGain() };
+  master.tone.type = 'lowpass';
+  master.dry.connect(master.out);
+  master.wet.connect(master.tone); master.tone.connect(master.out);
+  master.out.connect(AC.destination);
+  writeOutput();
+}
+function writeOutput() {
+  if (!master) return;
+  master.dry.gain.value = P.dry;
+  master.wet.gain.value = P.wet;
+  master.tone.frequency.value = P.tone;
+}
+
+function clearVoices() {
+  voices.forEach(function (v) {
+    [v.in, v.delay, v.lp, v.gain, v.pan].forEach(function (n) { try { n.disconnect(); } catch (e) {} });
+    killPitch(v);
+  });
+  voices = [];
+}
+
+/* Two delay lines ramped by a sawtooth and crossfaded by complementary
+   triangles: the standard delay-line shifter, the only kind that fits plain
+   WebAudio. Lifted from prototypes/delaunay_chassis.html.
+   ponytail: 90 ms window, phase-aligned only at start, so big shifts warble.
+   Good to about a fifth either way; clean means an AudioWorklet. */
+var PITCH_WINDOW = 0.09;
+function killPitch(v) {
+  if (!v.pitch) return;
+  v.pitch.forEach(function (n) { try { if (n.stop) n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} });
+  v.pitch = null;
+}
+function setPitch(v, semi) {
+  if (v.semi === semi) return;
+  killPitch(v);
+  try { v.lp.disconnect(); } catch (e) {}
+  v.semi = semi;
+  v.lp.connect(v.tap);                       // children always read the unshifted line
+  if (!semi) { v.lp.connect(v.gain); return; }
+  var r = Math.pow(2, semi / 12), W = PITCH_WINDOW;
+  var f = Math.abs(1 - r) / W, t = AC.currentTime, made = [];
+  var tri = AC.createOscillator(); tri.type = 'triangle'; tri.frequency.value = f;
+  var up = AC.createGain(); up.gain.value = 0.5;
+  var dn = AC.createGain(); dn.gain.value = -0.5;
+  tri.connect(up); tri.connect(dn); made.push(tri, up, dn);
+  [up, dn].forEach(function (win, k) {
+    var d = AC.createDelay(0.5); d.delayTime.value = W / 2;
+    var saw = AC.createOscillator(); saw.type = 'sawtooth'; saw.frequency.value = f;
+    var depth = AC.createGain(); depth.gain.value = (r > 1 ? -1 : 1) * W / 2;
+    saw.connect(depth); depth.connect(d.delayTime);
+    var g = AC.createGain(); g.gain.value = 0.5;
+    win.connect(g.gain);
+    v.lp.connect(d); d.connect(g); g.connect(v.gain);
+    saw.start(t + (k ? 0.5 / f : 0));
+    made.push(d, saw, depth, g);
+  });
+  tri.start(t);
+  v.pitch = made;
+}
+
+function rebuild() {
+  ensureAC();
+  nodes = LSystem.grow(P);
+  clearVoices();
+  nodes.forEach(function (n) {
+    var v = { n: n };
+    v.in = AC.createGain();
+    v.delay = AC.createDelay(6);
+    v.lp = AC.createBiquadFilter(); v.lp.type = 'lowpass';
+    v.tap = AC.createGain();                       // what children read
+    v.gain = AC.createGain(); v.gain.gain.value = n.gain;
+    v.pan = AC.createStereoPanner(); v.pan.pan.value = n.pan;
+    v.delay.delayTime.value = n.t - (n.parent >= 0 ? nodes[n.parent].t : 0);
+    v.lp.frequency.value = Math.max(400, 14000 * Math.pow(0.72, n.depth));
+    v.in.connect(v.delay); v.delay.connect(v.lp);
+    v.semi = null; v.pitch = null;
+    v.gain.connect(v.pan); v.pan.connect(master.wet);
+    voices.push(v);
+  });
+  voices.forEach(function (v) {
+    var src = v.n.parent >= 0 ? voices[v.n.parent].tap : master.in;
+    src.connect(v.in);
+    setPitch(v, v.n.semi);
+  });
+  document.getElementById('meta').textContent = nodes.length + ' nodes';
+  document.getElementById('rVoices').textContent = nodes.length;
+  document.getElementById('rSpan').textContent =
+    nodes.reduce(function (m, n) { return Math.max(m, n.t); }, 0).toFixed(2) + ' s';
+  travel = TreeTravel.mount(document.getElementById('tree'), nodes,
+    { speed: 0.3, labels: true, loop: true });
+  travel.play();
+}
+
+/* ---------- the wind loop (control rate, ~20 Hz) ---------- */
+function windTick() {
+  var t = AC ? AC.currentTime - t0 : 0;
+  var w = LSystem.wind(t, P);
+  document.getElementById('rWind').textContent = w.toFixed(2);
+  document.getElementById('windNeedle').style.left = (50 + w * 32) + '%';
+  if (voices.length) {
+    // one grow call gives the bent geometry, the bent pitches and the
+    // stretched delay times, so the drawing and the audio cannot disagree
+    var bent = LSystem.grow(P, w);
+    var tip = bent[bent.length - 1];
+    document.getElementById('rBend').textContent = tip.bend.toFixed(1) + '°';
+    document.getElementById('rNote').textContent = tip.note;
+    bent.forEach(function (n, i) {
+      var v = voices[i];
+      v.delay.delayTime.setTargetAtTime(n.t - (n.parent >= 0 ? bent[n.parent].t : 0),
+                                        AC.currentTime, 0.08);
+      v.pan.pan.setTargetAtTime(n.pan, AC.currentTime, 0.08);
+      setPitch(v, n.semi);                  // no-op unless the snapped degree changed
+    });
+    if (travel) travel.update(bent);
+  }
+  setTimeout(windTick, 50);
+}
+
+/* ---------- source ---------- */
+function loadURL(url) {
+  return fetch(url).then(function (r) { return r.arrayBuffer(); })
+    .then(function (b) { return AC.decodeAudioData(b); })
+    .then(function (buf) { buffer = buf; document.getElementById('hint').textContent =
+      'Loaded ' + url.split('/').pop() + ' — ' + buf.duration.toFixed(1) + ' s'; })
+    .catch(function () { document.getElementById('hint').textContent =
+      'Could not fetch that file (file:// blocks it). Drop an audio file in instead.'; });
+}
+document.getElementById('src').addEventListener('change', function (e) { ensureAC(); loadURL(e.target.value); });
+document.getElementById('file').addEventListener('change', function (e) {
+  var f = e.target.files[0]; if (!f) return;
+  ensureAC();
+  f.arrayBuffer().then(function (b) { return AC.decodeAudioData(b); }).then(function (buf) {
+    buffer = buf;
+    document.getElementById('hint').textContent = 'Loaded ' + f.name + ' — ' + buf.duration.toFixed(1) + ' s';
+  });
+});
+document.getElementById('play').addEventListener('click', function () {
+  ensureAC();
+  if (AC.state === 'suspended') AC.resume();
+  if (playing) { stopSource(); return; }
+  if (!buffer) { loadURL(document.getElementById('src').value).then(startSource); return; }
+  startSource();
+});
+function startSource() {
+  if (!buffer) return;
+  stopSource();
+  srcNode = AC.createBufferSource();
+  srcNode.buffer = buffer;
+  srcNode.loop = document.getElementById('loop').classList.contains('on');
+  srcNode.connect(master.in); srcNode.connect(master.dry);
+  srcNode.onended = function () { if (srcNode) { playing = false; document.getElementById('play').textContent = 'Play'; } };
+  srcNode.start();
+  playing = true; document.getElementById('play').textContent = 'Stop';
+}
+function stopSource() {
+  if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode.disconnect(); srcNode = null; }
+  playing = false; document.getElementById('play').textContent = 'Play';
+}
+document.getElementById('loop').addEventListener('click', function (e) {
+  e.target.classList.toggle('on');
+  if (srcNode) srcNode.loop = e.target.classList.contains('on');
+});
+document.getElementById('power').addEventListener('click', function (e) {
+  e.target.classList.toggle('on');
+  var on = e.target.classList.contains('on');
+  document.getElementById('device').classList.toggle('off', !on);
+  if (master) master.out.gain.value = on ? 1 : 0;
+});
+
+paint();
+ensureAC(); t0 = AC.currentTime;
+rebuild();
+windTick();
+</script>
+</body>
+</html>

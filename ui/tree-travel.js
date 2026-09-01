@@ -77,12 +77,14 @@
     var hue = function (n) { return 200 + n.depth * 14; };
 
     while (svg.firstChild) svg.removeChild(svg.firstChild);
-    nodes.forEach(function (n) {
-      svg.appendChild(el('line', { 'class': 'tt-edge', x1: TX(n.px), y1: TY(n.py),
-                                   x2: TX(n.x), y2: TY(n.y) }));
+    var edges = nodes.map(function (n) {
+      var e = el('line', { 'class': 'tt-edge', x1: TX(n.px), y1: TY(n.py),
+                           x2: TX(n.x), y2: TY(n.y) });
+      svg.appendChild(e); return e;
     });
-    nodes.forEach(function (n) {
-      svg.appendChild(el('circle', { 'class': 'tt-node', cx: TX(n.x), cy: TY(n.y), r: 2 }));
+    var pts = nodes.map(function (n) {
+      var c = el('circle', { 'class': 'tt-node', cx: TX(n.x), cy: TY(n.y), r: 2 });
+      svg.appendChild(c); return c;
     });
 
     var lit = nodes.map(function (n) {
@@ -130,7 +132,21 @@
       else if (loop) { t0 = null; raf = requestAnimationFrame(step); }
       else raf = null;
     }
+    /* Same tree, moved: a wind field re-grows it every control tick, so only
+       the coordinates change. Rebuilding the DOM 20 times a second to say that
+       would be silly. */
+    function update(next) {
+      nodes = next;
+      nodes.forEach(function (n, i) {
+        edges[i].setAttribute('x1', TX(n.px)); edges[i].setAttribute('y1', TY(n.py));
+        edges[i].setAttribute('x2', TX(n.x));  edges[i].setAttribute('y2', TY(n.y));
+        pts[i].setAttribute('cx', TX(n.x));    pts[i].setAttribute('cy', TY(n.y));
+        lit[i].setAttribute('cx', TX(n.x));    lit[i].setAttribute('cy', TY(n.y));
+      });
+    }
+
     var api = {
+      update: update,
       play: function () { if (raf) cancelAnimationFrame(raf); t0 = null; raf = requestAnimationFrame(step); },
       pause: function () { if (raf) cancelAnimationFrame(raf); raf = null; },
       seek: function (t) { api.pause(); draw(t); },
