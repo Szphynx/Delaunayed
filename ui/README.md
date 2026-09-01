@@ -282,3 +282,48 @@ them and the rest is the patch.
   511. Animating the full tree is legible only as a cloud, so the shallow copy is the
   visualisation and the deep one is the sound; regenerate both from the same `grow()` call
   if the params change.
+
+---
+
+## Accessibility (WCAG 2.1 AA)
+
+An audit pass against WCAG 2.1 AA — the standard the ADA points to for the web —
+found and fixed four real gaps, and left two open that are bigger than a pass:
+
+- **Text contrast.** `--mut` (#6d6d6d, 3.83:1) and `--dim` (#4a4a4a, 2.23:1) both
+  failed 4.5:1 for small text against `--bg`. Retuned to `#8a8a8a` (5.73:1) and
+  `#7a7a7a` (4.61:1) — same hierarchy (mut lighter than dim), now passing. The
+  matching literals in `delaunay_chassis.html` and `wfc_chassis.html`'s own page
+  chrome got the same fix, since they're the same failure in the same colors.
+- **Focus visibility.** The shared `:focus-visible` ring was a single accent color,
+  and an accent can be *anything* — `--acc` is red on the base theme, blue on the
+  tree device, and a button's own "on" state can swap its background to `--ink`
+  (near-white). No single ring color clears 3:1 (WCAG 1.4.11) against all of dark
+  chrome, a light "on" state, and both accent hues at once. Fixed with a black
+  outline plus an inset white box-shadow together: whichever one the background
+  defeats, the other one doesn't.
+- **The on-screen keyboard was mouse/touch-only.** `prototypes/lsystem_chassis.html`'s
+  piano keys were bare `<div>`s — no role, no name, not in tab order, silent to a
+  screen reader. Now `role="button" tabindex="0"`, `aria-label` naming the note and
+  whether it's in the current scale, `aria-pressed` tracking hold state, and
+  Enter/Space press-and-hold mirroring pointerdown/up (a native `<button>` only
+  fires one `click` on keyup, which can't tell a held note from a tap).
+- **In-scale was color only.** The lit-key highlight is a real WCAG 1.4.1 violation
+  on its own — fixed two ways: the new `aria-label` states it in words, and a small
+  dot now marks an in-scale key visually so the distinction isn't hue alone.
+
+**Left open**, because fixing them is a feature, not a pass:
+- **Canvas drag gestures have no keyboard equivalent.** Dragging a node (delaunay),
+  painting a tile (wfc), or dragging the tree for wind (lsystem) is pointer/touch
+  only. The canvases are now `aria-hidden` — every spec's `readout()` already gives
+  the same state as text, so a screen reader announcing an empty, unlabeled canvas
+  was worse than announcing nothing — but that hides the problem rather than
+  solving it. A real fix is a keyboard-operable equivalent per gesture (arrow-key
+  nudge, tab-to-node-then-edit); on the tree device specifically, the WIND page's
+  Amount/Rate/Gust sliders already reach most of the same parameter space by
+  keyboard, which softens this without closing it.
+- **Continuous canvas animation has no pause control.** WCAG 2.2.2 (AA) asks for a
+  way to pause auto-updating content running longer than 5 seconds alongside other
+  content. `prefers-reduced-motion` stops CSS transitions but not the `draw()` loop
+  itself. Slow, organic movement (no flashing, no seizure risk) rather than a hard
+  blocker, but not a clean pass either.

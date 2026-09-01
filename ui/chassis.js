@@ -284,6 +284,12 @@ var Chassis = (function () {
 
     var cv = el('canvas', variant === 'phone' ? 'pcanvas' : 'rcanvas');
     cv.width = V.canvas[0]; cv.height = V.canvas[1];
+    // Hidden from assistive tech, not just unlabeled: every spec's state also
+    // has a text form in readout(), so a screen reader announcing "canvas,
+    // clickable" with nothing behind it would be worse than announcing
+    // nothing. The canvas's own drag gestures (dragging a node, painting a
+    // tile) have no keyboard equivalent yet — a real gap, not one this fixes.
+    cv.setAttribute('aria-hidden', 'true');
     var tabHost = el('div', V.tabsCls);
     tabHost.setAttribute('role', 'tablist');
     var transport = el('div', V.transportCls);

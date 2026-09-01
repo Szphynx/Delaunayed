@@ -24,7 +24,7 @@
   .lede{font-family:Georgia,serif;font-style:italic;color:#7fa3b8;font-size:14px;margin:12px 0 0;max-width:62ch}
   .lede b{font-style:normal;font-family:inherit;font-weight:400;color:#dfeef6}
   .bodies{display:flex;gap:34px;flex-wrap:wrap;align-items:flex-start;justify-content:center}
-  .cap{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#4f7d95;margin:0 0 9px}
+  .cap{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:#5a8aa3;margin:0 0 9px}
   #phonemount{display:flex;justify-content:center;overflow:hidden}
   #phone{transform-origin:top center}
   /* The rack is a fixed 632px mockup, wider than most phones. Below that it
@@ -48,12 +48,23 @@
   #keys .w{flex:1;background:#c9dde8;border:1px solid #0d2a40;border-top:none;border-radius:0 0 3px 3px;
            position:relative;cursor:pointer}
   #keys .w.inkey{background:#8fd4ea}
+  /* in-scale is never color alone: a dot marks it too, for colorblind and
+     grayscale-display readers (WCAG 1.4.1 use of color). */
+  #keys .w.inkey::before{content:"";position:absolute;top:6px;left:50%;
+    transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#0d2a40}
+  #keys .b.inkey::before{content:"";position:absolute;top:4px;left:50%;
+    transform:translateX(-50%);width:3px;height:3px;border-radius:50%;background:#8fd4ea}
   #keys .w.down{background:#5fc0e4}
   #keys .b{position:absolute;top:0;width:52%;height:62%;background:#0a1f30;border:1px solid #06131e;
            border-top:none;border-radius:0 0 3px 3px;transform:translateX(74%);z-index:2;cursor:pointer}
   #keys .b.inkey{background:#1d5b7c;border-color:#2c6c8c}
   #keys .b.down{background:#4fd6c4}
-  #keys .lbl{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:8px;color:#3c6f8c}
+  #keys .lbl{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:8px;color:#1f4a63;pointer-events:none}
+  /* A single outline color can't hit 3:1 against both a light white key and
+     a dark black key (WCAG 1.4.11) — paired dark+light rings so one of the
+     two always contrasts with whatever key is focused. */
+  #keys .w:focus-visible,#keys .b:focus-visible{outline:2px solid #08192a;outline-offset:-2px;
+    box-shadow:inset 0 0 0 4px #fff;z-index:3}
 </style>
 </head>
 <body>
@@ -81,12 +92,12 @@
     <div class="line">
       <button id="play">Play</button>
       <button id="loop">Loop: on</button>
-      <select id="pick">
+      <select id="pick" aria-label="Audio source">
         <option value="../assets/audio/07_tonal_dry_Am.wav">A minor drone</option>
         <option value="../assets/audio/00_dry_source.wav">Marimba</option>
         <option value="../assets/audio/amen_break_138bpm.wav">Amen break</option>
       </select>
-      <input type="file" id="file" accept="audio/*"/>
+      <input type="file" id="file" accept="audio/*" aria-label="Load an audio file"/>
       <button id="latch">Latch: off</button>
     </div>
     <div id="keys"></div>
@@ -292,19 +303,27 @@ var DLNY_AUDIO = (function () {
     return degrees.indexOf((((midi - 57 - S.rootSemi) % 12) + 12) % 12) >= 0;
   }
 
+  var NOTE_NAMES = ['C', 'C\u266f', 'D', 'D\u266f', 'E', 'F', 'F\u266f', 'G', 'G\u266f', 'A', 'A\u266f', 'B'];
+  function keyName(m) { return NOTE_NAMES[((m % 12) + 12) % 12] + (Math.floor(m / 12) - 1); }
+  function keyLabel(m) { return keyName(m) + (inKey(m) ? ', in scale' : ', out of scale'); }
+
   function press(midi, el) {
     if (down[midi]) return;
     down[midi] = true;
-    if (el) el.classList.add('down');
+    if (el) { el.classList.add('down'); el.setAttribute('aria-pressed', 'true'); }
     synth().noteOn(midi, 0.85);
   }
   function release(midi, el) {
     if (!down[midi]) return;
     delete down[midi];
-    if (el) el.classList.remove('down');
+    if (el) { el.classList.remove('down'); el.setAttribute('aria-pressed', 'false'); }
     if (!latch) synth().noteOff(midi);
   }
 
+  // Each key is a real control — role, name, pressed state and a keyboard
+  // path — not just a div a screen reader has no way to describe. The a-w-s…
+  // computer-key row already plays notes without needing focus at all; this
+  // is what lets Tab + Enter/Space do the same for anyone who can't point.
   var keyEls = {};
   (function buildKeys() {
     var host = document.getElementById('keys');
@@ -312,12 +331,16 @@ var DLNY_AUDIO = (function () {
       if (BLACK[((m % 12) + 12) % 12]) continue;           // whites lay out the row
       var w = document.createElement('div');
       w.className = 'w'; w.dataset.m = m;
+      w.setAttribute('role', 'button'); w.tabIndex = 0;
+      w.setAttribute('aria-pressed', 'false'); w.setAttribute('aria-label', keyLabel(m));
       if (m % 12 === 0) w.innerHTML = '<span class="lbl">C' + (Math.floor(m / 12) - 1) + '</span>';
       host.appendChild(w); keyEls[m] = w;
       var b = m + 1;
       if (b <= KEY_HI && BLACK[((b % 12) + 12) % 12]) {
         var bk = document.createElement('div');
         bk.className = 'b'; bk.dataset.m = b;
+        bk.setAttribute('role', 'button'); bk.tabIndex = 0;
+        bk.setAttribute('aria-pressed', 'false'); bk.setAttribute('aria-label', keyLabel(b));
         w.appendChild(bk); keyEls[b] = bk;
       }
     }
@@ -325,7 +348,8 @@ var DLNY_AUDIO = (function () {
       var m = e.target.dataset && e.target.dataset.m;
       if (!m) return;
       e.preventDefault();
-      if (latch && down[+m]) { synth().noteOff(+m); delete down[+m]; e.target.classList.remove('down'); return; }
+      if (latch && down[+m]) { synth().noteOff(+m); delete down[+m];
+        e.target.classList.remove('down'); e.target.setAttribute('aria-pressed', 'false'); return; }
       press(+m, e.target);
       host.setPointerCapture(e.pointerId);
     });
@@ -336,6 +360,20 @@ var DLNY_AUDIO = (function () {
     host.addEventListener('pointerleave', function () {
       if (latch) return;
       Object.keys(down).forEach(function (m) { release(+m, keyEls[m]); });
+    });
+    // Enter/Space mirrors pointerdown/up — a native <button> only fires a
+    // single 'click' on keyup, which can't tell a held note from a tap.
+    host.addEventListener('keydown', function (e) {
+      var m = e.target.dataset && e.target.dataset.m;
+      if (!m || (e.key !== 'Enter' && e.key !== ' ') || e.repeat) return;
+      e.preventDefault();
+      press(+m, e.target);
+    });
+    host.addEventListener('keyup', function (e) {
+      var m = e.target.dataset && e.target.dataset.m;
+      if (!m || (e.key !== 'Enter' && e.key !== ' ')) return;
+      e.preventDefault();
+      if (!latch) release(+m, e.target);
     });
   })();
 
@@ -364,7 +402,10 @@ var DLNY_AUDIO = (function () {
     var sig = S.keyIdx + '/' + S.rootSemi;
     if (sig === lastKey) return;
     lastKey = sig;
-    Object.keys(keyEls).forEach(function (m) { keyEls[m].classList.toggle('inkey', inKey(+m)); });
+    Object.keys(keyEls).forEach(function (m) {
+      keyEls[m].classList.toggle('inkey', inKey(+m));
+      keyEls[m].setAttribute('aria-label', keyLabel(+m));
+    });
   }
 
   return { sync: function () { sync(); lights(); } };
