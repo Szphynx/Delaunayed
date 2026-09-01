@@ -108,7 +108,7 @@
   var AC = null, masterIn, dryGain, wetGain, toneFilt, masterBus, limiter, outGain,
       echoDelay, echoFb, capNode, muteSink, capBuf, capLen, capW = 0;
   var laneNodes = [], laneSig = [], lastLanesMeta = null, srcNode = null, buffer = null,
-      micStream = null, playing = false, lastEngine = null, lastPlayCol = -1, last = {};
+      micStream = null, playing = false, lastEngine = null, last = {};
 
   function fadeTC() { return Math.max(0.004, S.glide / 1000 / 3); }
   function set(param, value) { param.setTargetAtTime(value, AC.currentTime, fadeTC()); }
@@ -314,20 +314,48 @@
     laneNodes.forEach(function (n) { if (n.gate) n.gate.gain.setTargetAtTime(0, AC.currentTime, 0.02); });
   }
 
-  /* ---------- step trigger: rides the chassis's own playCol, no separate clock.
-     ponytail: this fires from the rAF sync() below rather than a look-ahead
-     scheduler, so timing carries rAF jitter (~ a frame). Fine for a prototype;
-     prototypes/wfc_multitap.html's setInterval look-ahead scheduler is the
-     fix if this ever needs to be tight. ---------- */
-  function fireStep(col) {
+  /* ---------- scheduler (look-ahead, ported from wfc_multitap.html) ----------
+     Triggering reactively from the rAF sync() below — "now + a few ms" the
+     instant S.playCol changed — sounded fine in a quiet tab and glitched hard
+     under any real load: a canvas repaint or DOM rebuild landing between the
+     scheduled time and AudioBufferSourceNode.start() pushes the start into
+     the past, which is audible as clicks and dropouts. A look-ahead scheduler
+     on its own timer, decoupled from rAF, is what actually stays clean. At
+     the default 1/16 step division this also tracks S.playCol almost exactly,
+     since stepDur() and the chassis's own tick() cadence agree; a non-default
+     Step (GRID page) only changes the note LENGTH here (grain window,
+     multitap-gate hold), not this scheduler's cadence, so the two can drift
+     apart — acceptable for a prototype, called out rather than silently
+     wrong. */
+  var curStep = 0, nextStepTime = 0, schedTimer = null;
+  function scheduleStep(col, time) {
     for (var lane = 0; lane < S.lanes; lane++) {
       var meta = S.lanesMeta[lane];
       if (!meta || laneMuted(meta)) continue;
       var tile = I.at(col, lane);
       if (!tile) continue;   // 0 === silent
-      var time = AC.currentTime + 0.005;
       if (S.engine === 'grain') triggerGrain(lane, tile, time); else triggerGate(lane, tile, time);
     }
+  }
+  function scheduler() {
+    if (!AC) return;
+    var ahead = 0.12;
+    if (nextStepTime < AC.currentTime - 0.25) nextStepTime = AC.currentTime + 0.02;   // resync if the tab was backgrounded
+    while (nextStepTime < AC.currentTime + ahead) {
+      scheduleStep(curStep, nextStepTime);
+      nextStepTime += stepDur();
+      curStep = (curStep + 1) % S.cols;
+    }
+  }
+  function startSeq() {
+    curStep = S.playCol % S.cols;
+    nextStepTime = AC.currentTime + 0.06;
+    if (schedTimer) clearInterval(schedTimer);
+    schedTimer = setInterval(scheduler, 25);
+  }
+  function stopSeq() {
+    if (schedTimer) { clearInterval(schedTimer); schedTimer = null; }
+    stopGates();
   }
 
   /* ---------- source ---------- */
@@ -385,12 +413,8 @@
 
     if (S.play !== playing) {
       playing = S.play;
-      if (playing) { AC.resume(); startSource(); }
-      else { stopSource(); stopGates(); }
-    }
-    if (S.playCol !== lastPlayCol) {
-      lastPlayCol = S.playCol;
-      if (playing && !bypass) fireStep(S.playCol);
+      if (playing) { AC.resume(); startSource(); startSeq(); }
+      else { stopSource(); stopSeq(); }
     }
 
     last.wet = S.wet; last.tone = S.tone; last.out = S.out; last.fb = S.fb; last.bypass = bypass;
