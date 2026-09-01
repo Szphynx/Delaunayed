@@ -285,17 +285,29 @@ var WaveOut = (function(){
 /* ---------------- audio: 3D-panned synth voices ---------------- */
 var actx = null, listener = null, master = null;
 function ensureAudio(){
-  if (actx) return;
-  actx = new (window.AudioContext || window.webkitAudioContext)();
-  listener = actx.listener;
-  if (listener.positionZ) { listener.positionX.value=0; listener.positionY.value=0; listener.positionZ.value=0; }
-  master = actx.createGain(); master.gain.value = 0.5; master.connect(actx.destination);
+  if (!actx) {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    listener = actx.listener;
+    if (listener.positionZ) { listener.positionX.value=0; listener.positionY.value=0; listener.positionZ.value=0; }
+    if (listener.forwardZ) { listener.forwardX.value=0; listener.forwardY.value=0; listener.forwardZ.value=-1;
+                              listener.upX.value=0; listener.upY.value=1; listener.upZ.value=0; }
+    else if (listener.setOrientation) listener.setOrientation(0,0,-1, 0,1,0);
+    master = actx.createGain(); master.gain.value = 0.5; master.connect(actx.destination);
+  }
+  // iOS Safari suspends the context until a user gesture explicitly resumes
+  // it, and re-suspends on backgrounding/mute-switch toggles — resume every
+  // time a gesture calls in, not just on first creation.
+  if (actx.state === 'suspended') actx.resume();
+  // Old WebKit only unlocks the audio pipeline once a buffer has actually
+  // been played inside the gesture; a silent one-sample buffer does it.
+  var b = actx.createBuffer(1, 1, actx.sampleRate);
+  var src = actx.createBufferSource(); src.buffer = b; src.connect(actx.destination); src.start(0);
 }
 function panFor(col, lane){
   var originX = -((ST.cols-1)*SP)/2, originY = -((ST.lanes-1)*SP)/2;
   var x = (originX + col*SP)/26, y = -(originY + lane*SP)/26, z = depthFor(col,lane)/26;
   var p = actx.createPanner();
-  p.panningModel = 'HRTF'; p.distanceModel = 'inverse';
+  p.panningModel = 'equalpower'; p.distanceModel = 'inverse';
   p.refDistance = 1; p.maxDistance = 40; p.rolloffFactor = 1.1;
   if (p.positionX) { p.positionX.value = x; p.positionY.value = y; p.positionZ.value = z; }
   else p.setPosition(x, y, z);
