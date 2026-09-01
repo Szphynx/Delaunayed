@@ -39,6 +39,21 @@ def write_wav(name, y):
 
 # ---------------------------------------------------------------- scales
 JUST = [1/1, 9/8, 6/5, 5/4, 4/3, 3/2, 5/3, 7/4]          # cents-free ratios
+KEYS = {"minor_pentatonic": [0, 3, 5, 7, 10],            # semitone degrees
+        "natural_minor":    [0, 2, 3, 5, 7, 8, 10],
+        "dorian":           [0, 2, 3, 5, 7, 9, 10],
+        "major":            [0, 2, 4, 5, 7, 9, 11]}
+
+def snap_key(cents, degrees, root_semi):
+    """Absolute snap: nearest degree of a fixed key, any octave. Key is
+    absolute, intervals are relative — so this quantizes the ACCUMULATED
+    pitch, never a per-branch ratio."""
+    rel = cents - root_semi * 100
+    oct_, rem = divmod(rel, 1200.0)
+    best = min(degrees, key=lambda d: min(abs(d * 100 - rem), abs(d * 100 + 1200 - rem)))
+    if abs(best * 100 + 1200 - rem) < abs(best * 100 - rem):
+        best, oct_ = best, oct_ + 1
+    return root_semi * 100 + oct_ * 1200 + best * 100
 def snap(cents, mode):
     if mode == "off":
         return 2 ** (cents / 1200.0)
@@ -52,7 +67,8 @@ def snap(cents, mode):
 
 # ------------------------------------------------------- grow the tree
 def grow(branch=2, angle=25.0, ratio=0.62, decay=0.72, cents_per_deg=8.0,
-         scale="12tet", base_len=0.26, max_depth=8, floor=1e-3):
+         scale="12tet", base_len=0.26, max_depth=8, floor=1e-3,
+         key="minor_pentatonic", root_semi=0):
     """Turtle walk -> node list. Each node compounds its parent's state."""
     nodes = []            # (time, gain, pitch, pan, depth, x, y, parent_x, parent_y)
     def walk(t, g, p, heading, depth, x, y, length):
@@ -60,7 +76,15 @@ def grow(branch=2, angle=25.0, ratio=0.62, decay=0.72, cents_per_deg=8.0,
             return
         t = t + base_len * (ratio ** depth)      # geometric, not linear
         g = g * decay
-        p = p * snap(heading * cents_per_deg, scale)
+        if scale == "key":
+            # heading is already cumulative, so it IS the accumulated pitch.
+            # Snap it to the key, then bend the turtle back onto that pitch:
+            # the tree can only grow along scale degrees.
+            cents = snap_key(heading * cents_per_deg, KEYS[key], root_semi)
+            heading = cents / cents_per_deg
+            p = 2 ** (cents / 1200.0)
+        else:
+            p = p * snap(heading * cents_per_deg, scale)
         nx = x + length * math.sin(math.radians(heading))
         ny = y - length * math.cos(math.radians(heading))
         nodes.append((t, g, p, math.sin(math.radians(heading)), depth, nx, ny, x, y))
@@ -144,6 +168,9 @@ if __name__ == "__main__":
         ("06_lsystem_e_branch3.wav",       dict(branch=3, decay=0.62, max_depth=5)),
         ("06_lsystem_f_long_decay.wav",    dict(decay=0.85, base_len=0.4)),
         ("06_lsystem_g_growth.wav",        dict()),
+        ("06_lsystem_h_key_locked.wav",    dict(scale="key", key="minor_pentatonic",
+                                               root_semi=0, angle=34.0, ratio=0.8,
+                                               base_len=0.4, decay=0.78)),
     ]
     for name, over in variants:
         p = dict(base); p.update(over)

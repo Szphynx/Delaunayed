@@ -147,6 +147,7 @@ spec in ways worth naming rather than quietly overwriting:
 &nbsp;·&nbsp; [`e_branch3`](assets/audio/06_lsystem_e_branch3.wav)
 &nbsp;·&nbsp; [`f_long_decay`](assets/audio/06_lsystem_f_long_decay.wav)
 &nbsp;·&nbsp; [`g_growth`](assets/audio/06_lsystem_g_growth.wav)
+&nbsp;·&nbsp; [`h_key_locked`](assets/audio/06_lsystem_h_key_locked.wav)
 &nbsp;·&nbsp; [`z_flat_control`](assets/audio/06_lsystem_z_flat_control.wav)
 &nbsp;·&nbsp; sketch: [`prototypes/lsystem_tree_delay.py`](prototypes/lsystem_tree_delay.py)
 
@@ -163,6 +164,11 @@ spec in ways worth naming rather than quietly overwriting:
   → snap to 12-TET (tonal, echoes arpeggiate up the branches), to just ratios (branches beat
   pure against each other), or not at all (microtonal drift, further off-grid with depth).
   One array swap between the three worlds.
+- **Key lock (`h`):** a key is *absolute*, an interval is *relative*, so locking one can't be done by
+  quantizing per-branch ratios — their products drift off the scale. Snap the **accumulated** pitch to a
+  degree of the chosen key, then back-solve the heading from it: the turtle can only turn to angles that
+  land on a degree, so **the tree itself grows along the key**. A minor pentatonic gives 17 distinct
+  pitches, all degrees, against the baseline's 59 free ratios — and the widest stereo field of the set.
 - **Control demo:** `z_flat_control` is the same node count with linear times and no
   inheritance — a plain multitap. It's the A/B that justifies the architecture.
 - **Effort:** Low. Node list is control-rate; `poly~` of delay voices renders it.
