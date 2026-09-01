@@ -427,11 +427,53 @@ function fadeTC(){return Math.max(0.004,glideMs/1000/3);}
 function stepDur(){return Math.max(0.03,DIVS[stepDivIdx].beats*60/BPM*delayMult);}
 function echoTime(){return Math.min(1.9,stepDur()*3);}
 
+/* ---------- mobile audio session ----------------------------------------
+   iOS parks WebAudio on the ringer channel — silent-switch muted, and on many
+   devices no output at all — and only moves it to the playback channel while
+   an HTMLMediaElement is genuinely playing. It falls straight back when that
+   element stops, so a one-shot unlock blip buys nothing. getUserMedia flips
+   the same switch, which is why granting the mic was the only way to hear
+   this page. Hence a *silent looping* element, kept alive for as long as the
+   page wants audio. Silent by content, not by volume: iOS ignores .volume on
+   media elements, so unlocking with the demo sample plays it out loud with
+   nothing left holding a reference to stop it.
+   Canonical copy, with the full notes: ui/audio-session.js — inlined here
+   because this prototype is meant to work as a single saved file. */
+const AudioSession=(()=>{
+  let el=null;const ctxs=[];
+  const silentWav=sec=>{                     // 8-bit 8 kHz mono, every sample at the zero level
+    const n=Math.round(8000*sec),b=new Uint8Array(44+n),d=new DataView(b.buffer);
+    const tag=(o,t)=>{for(let i=0;i<t.length;i++)b[o+i]=t.charCodeAt(i);};
+    tag(0,'RIFF');d.setUint32(4,36+n,true);tag(8,'WAVEfmt ');d.setUint32(16,16,true);
+    d.setUint16(20,1,true);d.setUint16(22,1,true);d.setUint32(24,8000,true);
+    d.setUint32(28,8000,true);d.setUint16(32,1,true);d.setUint16(34,8,true);
+    tag(36,'data');d.setUint32(40,n,true);b.fill(128,44);
+    let str='';for(let i=0;i<b.length;i++)str+=String.fromCharCode(b[i]);
+    return 'data:audio/wav;base64,'+btoa(str);
+  };
+  const keep=()=>{if(el&&el.paused){const p=el.play();if(p&&p.catch)p.catch(()=>{});}};
+  const resume=()=>ctxs.forEach(c=>{if(c.state!=='running'){const p=c.resume();if(p&&p.catch)p.catch(()=>{});}});
+  // A call, the lock screen or a tab switch suspends both; returning is the moment to re-arm.
+  document.addEventListener('visibilitychange',()=>{if(!document.hidden&&el){keep();resume();}});
+  return {
+    unlock(){                                // call synchronously, before any await
+      if(!el){el=document.createElement('audio');el.src=silentWav(0.5);el.loop=true;
+        el.setAttribute('playsinline','');el.addEventListener('pause',keep);}  // iOS pauses it after an interruption
+      keep();resume();
+    },
+    attach(ac){if(ctxs.indexOf(ac)<0)ctxs.push(ac);resume();return ac;},
+    decode(ctx,ab){                          // Safari before 14.1 only has the callback form
+      return new Promise((res,rej)=>{const p=ctx.decodeAudioData(ab,res,rej);if(p&&p.then)p.then(res,rej);});
+    }
+  };
+})();
+
 async function initAudio(){
   if(AC)return;
-  const u=new Audio(AUDIO_URI);u.volume=0;u.play().catch(()=>{}); // iOS: unmutes WebAudio from the ring/silent switch
-  AC=new (window.AudioContext||window.webkitAudioContext)();
-  const ab=await fetch(AUDIO_URI).then(r=>r.arrayBuffer());buffer=await AC.decodeAudioData(ab);
+  // Constructed before the first await so it still belongs to the gesture that
+  // called us — a context built at page load is a silent one on iOS.
+  AC=AudioSession.attach(new (window.AudioContext||window.webkitAudioContext)());
+  if(!buffer){const ab=await fetch(AUDIO_URI).then(r=>r.arrayBuffer());buffer=await AudioSession.decode(AC,ab);}
   masterIn=AC.createGain();dryGain=AC.createGain();wetGain=AC.createGain();
   masterBus=AC.createGain();limiter=AC.createDynamicsCompressor();
   limiter.threshold.value=-6;limiter.knee.value=6;limiter.ratio.value=12;limiter.attack.value=0.003;limiter.release.value=0.12;
@@ -449,7 +491,9 @@ async function initAudio(){
   capNode.onaudioprocess=e=>{const inp=e.inputBuffer.getChannelData(0);for(let i=0;i<inp.length;i++){capBuf[capW]=inp[i];capW=(capW+1)%capLen;}};
   buildLaneNodes();applyMix();
 }
-async function ensureAudio(){if(!AC)await initAudio();if(AC.state==='suspended'){try{await AC.resume();}catch(e){}}}
+// The unlock has to happen in the synchronous prefix of this call, so every
+// handler must reach ensureAudio() before it awaits anything else.
+async function ensureAudio(){AudioSession.unlock();if(!AC)await initAudio();if(AC.state!=='running'){try{await AC.resume();}catch(e){}}}
 
 function buildLaneNode(i){
   const p=lanes[i];
@@ -547,14 +591,59 @@ function drawSourceTransport(){
   const sw=document.getElementById('srcwave');if(!sw)return;const sc=sw.getContext('2d');
   sc.clearRect(0,0,sw.width,sw.height);if(srcWaveOff)sc.drawImage(srcWaveOff,0,0,sw.width,sw.height);
   if(micOn){sc.fillStyle='rgba(242,107,138,0.95)';sc.font='700 12px ui-monospace,monospace';sc.fillText('● AUDIO IN — live',12,20);}
+  else if(source==='media'){sc.fillStyle='rgba(242,107,138,0.95)';sc.font='700 12px ui-monospace,monospace';sc.fillText('● MEDIA FILE — live',12,20);}
   else if(AC&&playing&&buffer&&srcNode){const frac=((AC.currentTime-srcStart)/buffer.duration)%1,x=frac*sw.width;
     sc.strokeStyle='#ff2a2a';sc.lineWidth=2;sc.beginPath();sc.moveTo(x,0);sc.lineTo(x,sw.height);sc.stroke();
     sc.fillStyle='rgba(255,42,42,0.95)';sc.font='700 11px ui-monospace,monospace';sc.fillText((frac*buffer.duration).toFixed(2)+' / '+buffer.duration.toFixed(2)+' S',12,18);}
 }
-function handleFile(file){if(!file)return;const rd=new FileReader();rd.onload=()=>loadArrayBuffer(rd.result,file.name);rd.readAsArrayBuffer(file);}
-async function loadArrayBuffer(ab,name){await ensureAudio();try{const buf=await AC.decodeAudioData(ab);buffer=buf;if(micOn)await toggleMic(true);document.getElementById('srcname').textContent='sample: '+name;drawSourceWave();if(playing&&source==='sample')restartSource();}catch(e){document.getElementById('srcname').textContent='decode failed: '+name;}}
+function handleFile(file){if(!file)return;
+  ensureAudio().catch(()=>{});                     // unlocks in its synchronous prefix, while the picker's gesture still counts
+  const rd=new FileReader();rd.onload=()=>loadArrayBuffer(rd.result,file);rd.readAsArrayBuffer(file);}
+async function loadArrayBuffer(ab,file){
+  await ensureAudio();const name=file.name,label=document.getElementById('srcname');
+  try{
+    const buf=await AudioSession.decode(AC,ab);
+    stopMedia();if(micOn)await toggleMic(true);
+    buffer=buf;source='sample';label.textContent='sample: '+name;drawSourceWave();
+    if(playing)restartSource();
+  }catch(e){
+    // Don't leave the previous sample looping as if nothing happened — either
+    // the media element takes over, or the failure is stated and the source stops.
+    if(useMediaFile(file))return;
+    if(srcNode){try{srcNode.stop();}catch(err){}srcNode=null;}
+    label.textContent='cannot decode '+name;
+  }
+}
+/* Safari refuses decodeAudioData on a video container (.mov, most .mp4), which
+   is exactly what a phone's picker hands over. Play the file through a media
+   element instead and feed it into the same input bus, the way the mic does. */
+let mediaEl=null,mediaSrc=null;
+function stopMedia(){
+  if(mediaSrc){try{mediaSrc.disconnect();}catch(e){}mediaSrc=null;}
+  if(mediaEl){try{mediaEl.pause();}catch(e){}URL.revokeObjectURL(mediaEl.src);mediaEl=null;}
+  if(source==='media')source='sample';
+}
+function useMediaFile(file){
+  stopMedia();
+  const label=document.getElementById('srcname');
+  try{
+    mediaEl=document.createElement(/^video\//.test(file.type)?'video':'audio');
+    mediaEl.src=URL.createObjectURL(file);mediaEl.loop=true;mediaEl.setAttribute('playsinline','');
+    mediaSrc=AC.createMediaElementSource(mediaEl);mediaSrc.connect(masterIn);
+  }catch(e){stopMedia();return false;}
+  if(micOn)toggleMic(true);
+  if(srcNode){try{srcNode.stop();}catch(e){}srcNode=null;}
+  source='media';label.textContent='media: '+file.name+' — live';
+  // The element is the last word on whether the file is playable at all: it
+  // reports a container WebAudio and the decoder both refused as an error.
+  mediaEl.addEventListener('error',()=>{stopMedia();label.textContent='cannot decode '+file.name;});
+  if(playing){const pr=mediaEl.play();
+    if(pr&&pr.catch)pr.catch(err=>{if(err&&err.name==='NotAllowedError')label.textContent='media: '+file.name+' — press Play';});}
+  return true;
+}
 async function toggleMic(forceOff){
   await ensureAudio();const mb=document.getElementById('micbtn');
+  if(!micOn&&forceOff!==true)stopMedia();
   if(micOn||forceOff===true){if(micSrc){try{micSrc.disconnect();}catch(e){}}if(micStream)micStream.getTracks().forEach(t=>t.stop());micSrc=null;micStream=null;micOn=false;source='sample';mb.classList.remove('on');mb.textContent='🎙 Audio In';return;}
   try{micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
     micSrc=AC.createMediaStreamSource(micStream);if(srcNode){try{srcNode.stop();}catch(e){}srcNode=null;}
@@ -784,8 +873,12 @@ function buildBrush(){
 }
 
 playBtn.addEventListener('click',async()=>{await ensureAudio();
-  if(!playing){if(!solveDone&&!grid.some(v=>v>=0))startCollapse();if(source==='sample')restartSource();playing=true;playBtn.textContent='■ Stop';playBtn.classList.add('on');startSeq();}
-  else{stopSeq();if(srcNode){try{srcNode.stop();}catch(e){}srcNode=null;}playing=false;playBtn.textContent='▶ Play';playBtn.classList.remove('on');}});
+  if(!playing){if(!solveDone&&!grid.some(v=>v>=0))startCollapse();if(source==='sample')restartSource();
+    if(source==='media'&&mediaEl)mediaEl.play().catch(()=>{});
+    playing=true;playBtn.textContent='■ Stop';playBtn.classList.add('on');startSeq();}
+  else{stopSeq();if(srcNode){try{srcNode.stop();}catch(e){}srcNode=null;}
+    if(source==='media'&&mediaEl)mediaEl.pause();
+    playing=false;playBtn.textContent='▶ Play';playBtn.classList.remove('on');}});
 collapseBtn.addEventListener('click',()=>{startCollapse();});
 reseedBtn.addEventListener('click',()=>{clearLocks();startCollapse();});
 regenBtn.addEventListener('click',()=>{COLS=+colsEl.value;LANES=+lanesEl.value;buildLanes(LANES);allocGrid();clearLocks();if(AC){buildLaneNodes();applyMix();}buildMixer();selLane=null;buildEditor();startCollapse();});
@@ -848,7 +941,15 @@ COLS=+colsEl.value;LANES=+lanesEl.value;
 buildLanes(LANES);allocGrid();buildMixer();buildEditor();setModeLine();updateRead();
 draw();drawSourceWave();
 startCollapse();                                   // crystallize once on load so the grid isn't blank
-initAudio().then(()=>{drawSourceWave();}).catch(()=>{});
+// Decode the embedded sample off-line purely to draw the waveform. A real
+// AudioContext opened at load time is the bug this page had: iOS leaves it on
+// the ringer channel for good, so it only ever made sound once getUserMedia
+// happened to move the session. The live context now waits for a tap.
+(async()=>{try{
+  const OC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
+  const embedded=await AudioSession.decode(new OC(1,1,44100),await fetch(AUDIO_URI).then(r=>r.arrayBuffer()));
+  if(!buffer){buffer=embedded;drawSourceWave();}   // a file picked while this decoded wins
+}catch(e){}})();
 </script>
 </body>
 </html>

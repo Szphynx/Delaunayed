@@ -88,6 +88,7 @@
   <footer>Delaunayed · chassis in <a href="../ui/README.md">ui/</a> · geometry in <a href="../max/dlny.map.js">max/dlny.map.js</a></footer>
 </div>
 
+<script src="../ui/audio-session.js"></script>
 <script src="../ui/chassis.js"></script>
 <script src="../ui/effects/delaunay.js"></script>
 <script>
@@ -111,7 +112,7 @@
   /* ---------- graph ---------- */
   function ensureAC() {
     if (AC) return AC;
-    AC = new (window.AudioContext || window.webkitAudioContext)();
+    AC = AudioSession.attach(new (window.AudioContext || window.webkitAudioContext)());
     master.live  = AC.createGain();                       // live source -> taps
     master.taps  = AC.createGain();                       // taps bus -> voices
     master.wet   = AC.createGain();                       // voices -> out
@@ -364,7 +365,7 @@
     // Works over http(s); file:// blocks fetch, so fall through to the synth.
     fetch('../assets/audio/00_dry_source.wav')
       .then(function (r) { if (!r.ok) throw 0; return r.arrayBuffer(); })
-      .then(function (a) { return AC.decodeAudioData(a); })
+      .then(function (a) { return AudioSession.decode(AC, a); })
       .then(function (b) { useBuffer(b, 'marimba (repo asset)'); })
       .catch(function () { useBuffer(synthBuffer(), 'built-in pluck'); });
   }
@@ -386,9 +387,10 @@
   /* ---------- page wiring ---------- */
   document.getElementById('file').addEventListener('change', function (e) {
     var f = e.target.files[0]; if (!f) return;
-    ensureAC();
-    f.arrayBuffer().then(function (a) { return AC.decodeAudioData(a); })
-      .then(function (b) { useBuffer(b, f.name); });
+    AudioSession.unlock(); ensureAC();
+    f.arrayBuffer().then(function (a) { return AudioSession.decode(AC, a); })
+      .then(function (b) { useBuffer(b, f.name); })
+      .catch(function () { nameEl.textContent = 'cannot decode ' + f.name + ' — try WAV/MP3/M4A'; });
   });
 
   document.getElementById('loop').addEventListener('click', function () {
@@ -398,7 +400,7 @@
 
   document.getElementById('mic').addEventListener('click', function () {
     var btn = this;
-    ensureAC();
+    AudioSession.unlock(); ensureAC();
     if (micStream) {
       micStream.getTracks().forEach(function (t) { t.stop(); });
       micStream = null; btn.classList.remove('on'); nameEl.textContent = 'mic off';
@@ -424,17 +426,21 @@
   });
   document.addEventListener('drop', function (e) {
     var f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return;
-    ensureAC();
-    f.arrayBuffer().then(function (a) { return AC.decodeAudioData(a); })
-      .then(function (b) { useBuffer(b, f.name); });
+    AudioSession.unlock(); ensureAC();
+    f.arrayBuffer().then(function (a) { return AudioSession.decode(AC, a); })
+      .then(function (b) { useBuffer(b, f.name); })
+      .catch(function () { nameEl.textContent = 'cannot decode ' + f.name + ' — try WAV/MP3/M4A'; });
   });
 
   // Browsers only allow an AudioContext to start inside a user gesture, and the
   // chassis transport runs in one — but the context has to exist before that,
-  // so take the first pointer anywhere on the page.
+  // so take the first pointer anywhere on the page. Not `once`: unlock() is
+  // idempotent and every later tap re-arms the iOS session after an
+  // interruption, which is what a single first-touch handler could not do.
   document.addEventListener('pointerdown', function () {
-    ensureAC(); AC.resume(); loadDefault();
-  }, { once: true });
+    AudioSession.unlock();
+    if (!AC) { ensureAC(); loadDefault(); }
+  });
 
   window.DLNY_AUDIO = { sync: sync };
 })();

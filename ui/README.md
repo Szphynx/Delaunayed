@@ -12,6 +12,7 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 |---|---|
 | `chassis.css` | All device chrome, both bodies. Scoped under `.dlny`, dark-only. |
 | `chassis.js` | `Chassis.mount(host, spec, 'phone'\|'rack')` + the reusable page bodies. |
+| `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
 | `effects/delaunay.js` | Engine A of `prototypes/delaunay_delay.html`, as a spec. |
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
 | `index.html` | Host page and effect picker. Copy it to start a new device. |
