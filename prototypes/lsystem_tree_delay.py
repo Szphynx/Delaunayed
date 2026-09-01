@@ -42,7 +42,10 @@ JUST = [1/1, 9/8, 6/5, 5/4, 4/3, 3/2, 5/3, 7/4]          # cents-free ratios
 KEYS = {"minor_pentatonic": [0, 3, 5, 7, 10],            # semitone degrees
         "natural_minor":    [0, 2, 3, 5, 7, 8, 10],
         "dorian":           [0, 2, 3, 5, 7, 9, 10],
-        "major":            [0, 2, 4, 5, 7, 9, 11]}
+        "major":            [0, 2, 4, 5, 7, 9, 11],
+        "phrygian":         [0, 1, 3, 5, 7, 8, 10],   # flat 2nd, Spanish darkness
+        "hijaz":            [0, 1, 4, 5, 7, 8, 11],   # maqam Hijaz: the augmented 2nd
+        "hirajoshi":        [0, 2, 3, 7, 8]}          # Japanese koto pentatonic
 
 def snap_key(cents, degrees, root_semi):
     """Absolute snap: nearest degree of a fixed key, any octave. Key is
@@ -160,6 +163,7 @@ if __name__ == "__main__":
 
     base = dict(branch=2, angle=25.0, ratio=0.62, decay=0.72, scale="12tet",
                 base_len=0.34)
+    KEYBASE = dict(root_semi=0, angle=34.0, ratio=0.8, base_len=0.4, decay=0.78)
     variants = [
         ("06_lsystem_a_baseline.wav",      dict()),
         ("06_lsystem_b_scale_off.wav",     dict(scale="off", angle=41.0)),
@@ -171,6 +175,9 @@ if __name__ == "__main__":
         ("06_lsystem_h_key_locked.wav",    dict(scale="key", key="minor_pentatonic",
                                                root_semi=0, angle=34.0, ratio=0.8,
                                                base_len=0.4, decay=0.78)),
+        ("06_lsystem_i_phrygian.wav",      dict(scale="key", key="phrygian", **KEYBASE)),
+        ("06_lsystem_j_hijaz.wav",         dict(scale="key", key="hijaz", **KEYBASE)),
+        ("06_lsystem_k_hirajoshi.wav",     dict(scale="key", key="hirajoshi", **KEYBASE)),
     ]
     for name, over in variants:
         p = dict(base); p.update(over)
@@ -181,6 +188,16 @@ if __name__ == "__main__":
             f"{len(nodes)} nodes | width = gain | hue = pitch ratio")
         print(f"   {name}: {len(nodes)} nodes, tail {max(n[0] for n in nodes):.2f}s, {p}")
 
+    # proof: every key-locked render must use ONLY degrees of its key
+    for kname in ("minor_pentatonic", "phrygian", "hijaz", "hirajoshi"):
+        nn = grow(**dict(base, scale="key", key=kname, **KEYBASE))
+        got = sorted({round(1200 * math.log2(n[2])) % 1200 for n in nn})
+        want = sorted(d * 100 for d in KEYS[kname])
+        unused = [d for d in want if d not in got]
+        ok = "OK" if set(got) <= set(want) else "VIOLATION"
+        print(f"   proof {kname:17s} used {got} | in-key {ok} | unreached {unused}")
+        assert set(got) <= set(want), kname   # nothing off-key, ever
+
     # control: same tap count, LINEAR times, no inheritance -> proves the tree matters
     nodes = grow(**base)
     flat = [(0.05 + 0.02 * i, n[1], 1.0, n[3], 0, i * 1.6 - 400, -8.0, i * 1.6 - 400, 0.0)
@@ -188,6 +205,28 @@ if __name__ == "__main__":
     write_wav("06_lsystem_z_flat_control.wav", render(dry, flat))
     svg(flat, os.path.join(IMG, "06_lsystem_z_flat_control.svg"),
         "same node budget, laid out linearly | no inheritance, no pitch")
+
+    # a small, legible tree exported for the travel animation on the doc page
+    import json
+    tnodes = grow(**dict(base, scale="key", key="minor_pentatonic",
+                         **dict(KEYBASE, max_depth=4)))
+    NAMES = ["A", "A\u266f", "B", "C", "C\u266f", "D", "D\u266f", "E", "F", "F\u266f", "G", "G\u266f"]
+    def name(pitch):
+        semis = round(12 * math.log2(pitch))
+        return NAMES[semis % 12] + str(3 + (semis + 9) // 12)
+    key_of = lambda n: (round(n[7], 4), round(n[8], 4))     # parent coords
+    index = {}
+    out = []
+    for i, n in enumerate(tnodes):
+        index[(round(n[5], 4), round(n[6], 4))] = i
+    for i, n in enumerate(tnodes):
+        t, g, pit, pan, depth, x, y, px, py = n
+        out.append(dict(i=i, parent=index.get(key_of(n), -1), t=round(t, 4),
+                        db=round(20 * math.log10(max(g, 1e-6)), 1), note=name(pit),
+                        x=round(x, 2), y=round(y, 2), px=round(px, 2), py=round(py, 2),
+                        depth=depth, pan=round(pan, 3)))
+    json.dump(out, open(os.path.join(HERE, "..", "assets", "lsystem_travel.json"), "w"))
+    print(f"wrote lsystem_travel.json ({len(out)} nodes)")
 
     # the README hero stays the baseline tree
     svg(grow(**base), os.path.join(IMG, "06_lsystem.svg"),

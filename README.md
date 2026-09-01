@@ -148,6 +148,9 @@ spec in ways worth naming rather than quietly overwriting:
 &nbsp;·&nbsp; [`f_long_decay`](assets/audio/06_lsystem_f_long_decay.wav)
 &nbsp;·&nbsp; [`g_growth`](assets/audio/06_lsystem_g_growth.wav)
 &nbsp;·&nbsp; [`h_key_locked`](assets/audio/06_lsystem_h_key_locked.wav)
+&nbsp;·&nbsp; [`i_phrygian`](assets/audio/06_lsystem_i_phrygian.wav)
+&nbsp;·&nbsp; [`j_hijaz`](assets/audio/06_lsystem_j_hijaz.wav)
+&nbsp;·&nbsp; [`k_hirajoshi`](assets/audio/06_lsystem_k_hirajoshi.wav)
 &nbsp;·&nbsp; [`z_flat_control`](assets/audio/06_lsystem_z_flat_control.wav)
 &nbsp;·&nbsp; sketch: [`prototypes/lsystem_tree_delay.py`](prototypes/lsystem_tree_delay.py)
 
@@ -169,6 +172,10 @@ spec in ways worth naming rather than quietly overwriting:
   degree of the chosen key, then back-solve the heading from it: the turtle can only turn to angles that
   land on a degree, so **the tree itself grows along the key**. A minor pentatonic gives 17 distinct
   pitches, all degrees, against the baseline's 59 free ratios — and the widest stereo field of the set.
+- **Scale tables:** minor pentatonic, natural minor, dorian, major, phrygian, maqam **hijaz**
+  (that augmented 2nd) and Japanese **hirajōshi**, plus a root-semitone transposition. The script
+  asserts every key-locked render uses only degrees of its key, and prints which degrees the geometry
+  never reached (hirajōshi never lands on its 2nd at 34°) rather than hiding it.
 - **Control demo:** `z_flat_control` is the same node count with linear times and no
   inheritance — a plain multitap. It's the A/B that justifies the architecture.
 - **Effort:** Low. Node list is control-rate; `poly~` of delay voices renders it.
