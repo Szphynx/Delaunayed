@@ -54,18 +54,20 @@ def snap(cents, mode):
 def grow(branch=2, angle=25.0, ratio=0.62, decay=0.72, cents_per_deg=8.0,
          scale="12tet", base_len=0.26, max_depth=8, floor=1e-3):
     """Turtle walk -> node list. Each node compounds its parent's state."""
-    nodes = []                                   # (time, gain, pitch, pan, depth)
-    def walk(t, g, p, heading, depth):
+    nodes = []            # (time, gain, pitch, pan, depth, x, y, parent_x, parent_y)
+    def walk(t, g, p, heading, depth, x, y, length):
         if depth > max_depth or g < floor:
             return
         t = t + base_len * (ratio ** depth)      # geometric, not linear
         g = g * decay
         p = p * snap(heading * cents_per_deg, scale)
-        nodes.append((t, g, p, math.sin(math.radians(heading)), depth))
+        nx = x + length * math.sin(math.radians(heading))
+        ny = y - length * math.cos(math.radians(heading))
+        nodes.append((t, g, p, math.sin(math.radians(heading)), depth, nx, ny, x, y))
         spread = np.linspace(-1, 1, branch) if branch > 1 else [0.0]
         for s in spread:
-            walk(t, g, p, heading + s * angle, depth + 1)
-    walk(0.0, 1.0, 1.0, 0.0, 0)
+            walk(t, g, p, heading + s * angle, depth + 1, nx, ny, length * ratio)
+    walk(0.0, 1.0, 1.0, 0.0, 0, 0.0, 0.0, 150.0)
     return nodes
 
 # --------------------------------------------------------------- render
@@ -79,7 +81,7 @@ def render(x, nodes, tail=3.0, grow_time=0.0, wet=0.9):
         s = dark[d - 1]
         dark[d] = 0.25 * np.roll(s, 1) + 0.5 * s + 0.25 * np.roll(s, -1)
     y = np.zeros((n, 2))
-    for (dt, g, p, pan, depth) in nodes:
+    for (dt, g, p, pan, depth, *_) in nodes:
         src = dark[depth]
         if p != 1.0:                              # varispeed pitch, tape style
             src = src[np.clip((np.arange(n) * p).astype(int), 0, n - 1)]
@@ -96,34 +98,36 @@ def render(x, nodes, tail=3.0, grow_time=0.0, wet=0.9):
     return 0.6 * dry + wet * y / math.sqrt(len(nodes))
 
 # ------------------------------------------------------------ the diagram
-def svg(nodes_params, path):
-    """Draw the turtle tree the audio actually used; colour = depth, dot = gain."""
-    W, H = 900, 560
+def svg(nodes, path, caption=""):
+    """Draw the exact tree the audio used. Position = turtle, width = gain,
+    hue = pitch ratio in cents, so two trees with identical skeletons but
+    different scale snapping look different."""
+    W, H, PAD = 900, 560, 40
+    xs = [n[5] for n in nodes] + [0.0]; ys = [n[6] for n in nodes] + [0.0]
+    sx = (W - 2*PAD) / max(1e-6, max(xs) - min(xs))
+    sy = (H - 2*PAD) / max(1e-6, max(ys) - min(ys))
+    k = min(sx, sy)
+    ox = W/2 - k * (min(xs) + max(xs)) / 2
+    oy = H - PAD + k * max(ys)
+    T = lambda x, y: (ox + k*x, oy - (-k*y))   # y already grows upward as negative
     segs, dots = [], []
-    def walk(x, y, g, heading, depth, length):
-        if depth > 7 or g < 1e-3:
-            return
-        nx = x + length * math.sin(math.radians(heading))
-        ny = y - length * math.cos(math.radians(heading))
-        hue = 190 + depth * 18
-        segs.append(f'<line x1="{x:.1f}" y1="{y:.1f}" x2="{nx:.1f}" y2="{ny:.1f}" '
-                    f'stroke="hsl({hue} 70% {70 - depth*5}%)" stroke-width="{max(0.7, 5*g):.1f}"/>')
-        dots.append(f'<circle cx="{nx:.1f}" cy="{ny:.1f}" r="{max(1.2, 6*g):.1f}" '
-                    f'fill="hsl({hue} 80% 60%)" fill-opacity="0.9"/>')
-        for s in np.linspace(-1, 1, nodes_params["branch"]):
-            walk(nx, ny, g * nodes_params["decay"], heading + s * nodes_params["angle"],
-                 depth + 1, length * nodes_params["ratio"])
-    walk(W / 2, H - 40, 1.0, 0.0, 0, 150)
-    txt = ('<text x="24" y="34" fill="#9fe8ff" font-family="monospace" font-size="17">'
-           'L-system branching delay tree</text>'
-           '<text x="24" y="56" fill="#6f8fa0" font-family="monospace" font-size="12">'
-           'segment = delay node &#183; child reads parent output, so times compound &#183; '
-           'turn angle = pitch ratio &#183; depth = gain and darkening</text>')
+    for (t, g, p, pan, depth, x, y, px, py) in nodes:
+        cents = 1200 * math.log2(p)
+        hue = (200 + cents * 0.22) % 360        # pitch -> hue
+        x1, y1 = ox + k*px, oy + k*py
+        x2, y2 = ox + k*x,  oy + k*y
+        segs.append(f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+                    f'stroke="hsl({hue:.0f} 72% {min(78, 44 + 40*g):.0f}%)" '
+                    f'stroke-width="{max(0.6, 5*g):.1f}" stroke-linecap="round"/>')
+        dots.append(f'<circle cx="{x2:.1f}" cy="{y2:.1f}" r="{max(1.0, 5.5*g):.1f}" '
+                    f'fill="hsl({hue:.0f} 82% 62%)" fill-opacity="0.9"/>')
+    cap = (f'<text x="24" y="{H-18}" fill="#6f8fa0" font-family="monospace" font-size="12">{caption}</text>'
+           if caption else "")
     open(path, "w").write(
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
         f'viewBox="0 0 {W} {H}"><rect width="{W}" height="{H}" fill="#0b1014"/>'
-        + txt + "".join(segs) + "".join(dots) + "</svg>")
-    print("wrote", path)
+        + "".join(segs) + "".join(dots) + cap + "</svg>")
+    print("wrote", os.path.basename(path))
 
 # ------------------------------------------------------------------ main
 if __name__ == "__main__":
@@ -146,13 +150,18 @@ if __name__ == "__main__":
         nodes = grow(**p)
         gt = 0.6 if "growth" in name else 0.0
         write_wav(name, render(dry, nodes, grow_time=gt))
+        svg(nodes, os.path.join(IMG, name.replace(".wav", ".svg")),
+            f"{len(nodes)} nodes | width = gain | hue = pitch ratio")
         print(f"   {name}: {len(nodes)} nodes, tail {max(n[0] for n in nodes):.2f}s, {p}")
 
     # control: same tap count, LINEAR times, no inheritance -> proves the tree matters
     nodes = grow(**base)
-    flat = [(0.05 + 0.02 * i, g, 1.0, pan, 0)
-            for i, (t, g, p, pan, d) in enumerate(sorted(nodes, key=lambda k: k[0]))]
+    flat = [(0.05 + 0.02 * i, n[1], 1.0, n[3], 0, i * 1.6 - 400, -8.0, i * 1.6 - 400, 0.0)
+            for i, n in enumerate(sorted(nodes, key=lambda k: k[0]))]
     write_wav("06_lsystem_z_flat_control.wav", render(dry, flat))
+    svg(flat, os.path.join(IMG, "06_lsystem_z_flat_control.svg"),
+        "same node budget, laid out linearly | no inheritance, no pitch")
 
-    svg(dict(branch=2, angle=25.0, ratio=0.62, decay=0.72),
-        os.path.join(IMG, "06_lsystem.svg"))
+    # the README hero stays the baseline tree
+    svg(grow(**base), os.path.join(IMG, "06_lsystem.svg"),
+        "baseline | width = gain | hue = pitch ratio")
