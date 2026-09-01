@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Collapse — mobile chassis prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap"/>
+<link rel="stylesheet" href="../ui/chassis.css"/>
+<style>
+  body{margin:0;padding:0 16px 56px;background:#0a0a0a;color:#eaeaea;
+       font:13px/1.5 'JetBrains Mono',ui-monospace,Menlo,monospace;
+       background-image:linear-gradient(rgba(255,255,255,.014) 1px,transparent 1px),
+                        linear-gradient(90deg,rgba(255,255,255,.014) 1px,transparent 1px);
+       background-size:32px 32px}
+  .shell{max-width:430px;margin:0 auto}
+  header{border-bottom:1px solid #252525;padding:30px 0 18px;margin-bottom:22px}
+  h1{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;letter-spacing:-.045em;
+     text-transform:uppercase;font-size:clamp(1.7rem,9vw,2.4rem);line-height:.88;margin:0}
+  h1 em{font-style:normal;color:#ff2a2a}
+  .lede{font-family:Georgia,serif;font-style:italic;color:#a8a8a8;font-size:14px;margin:12px 0 0}
+  .lede b{font-style:normal;font-family:inherit;font-weight:400;color:#eaeaea}
+  .spec{display:flex;align-items:baseline;gap:10px;font-size:10px;letter-spacing:.18em;
+        text-transform:uppercase;color:#6d6d6d;margin-bottom:11px}
+  .spec .n{font-family:'Helvetica Neue',Arial,sans-serif;font-weight:900;font-size:17px;
+           letter-spacing:-.02em;color:#eaeaea;font-variant-numeric:tabular-nums}
+  .spec .rule{flex:1;height:1px;background:#333;min-width:14px}
+  .mount{display:flex;justify-content:center}
+  /* source strip — stands in for whatever feeds the device inside Live */
+  #src{border:1px solid #252525;background:#101010;padding:12px 14px;margin-top:26px}
+  #src.drag{border-color:#ff2a2a}
+  #src h2{margin:0 0 9px;font-size:10px;letter-spacing:.2em;text-transform:uppercase;
+          color:#6d6d6d;font-weight:700}
+  #srcwave{width:100%;height:56px;background:#0c1018;border:1px solid #252525;display:block}
+  .srcbtns{display:flex;gap:7px;align-items:center;margin-top:9px;flex-wrap:wrap;font-size:11px}
+  .srcbtns button,.srcbtns label{background:transparent;border:1px solid #333;color:#6d6d6d;
+       font:700 10px/1 inherit;letter-spacing:.1em;text-transform:uppercase;padding:9px 12px;
+       cursor:pointer}
+  .srcbtns button:hover,.srcbtns label:hover{color:#eaeaea;border-color:#555}
+  .srcbtns button.on{background:#ff2a2a;color:#000;border-color:#ff2a2a}
+  .srcbtns button:focus-visible,.srcbtns label:focus-visible{outline:2px solid #5ad1c8;outline-offset:2px}
+  #srcname{color:#4a4a4a;letter-spacing:.06em;margin-left:auto;font-size:10px;text-transform:uppercase}
+  footer{margin-top:36px;padding-top:16px;border-top:1px solid #252525;font-size:10px;
+         letter-spacing:.14em;color:#4a4a4a;text-transform:uppercase}
+  footer a{color:#6d6d6d}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <h1>Collapse<em>.</em> mobile</h1>
+    <p class="lede">The WFC multitap spec, alone on a phone body — real WebAudio, no rack
+      alongside it. Paint tiles on the grid (<b>GRID</b>/<b>RULE</b> pages), pick <b>GRN</b>
+      (captured grains) or <b>GATE</b> (multitap delay taps) on the transport, then tap
+      anywhere to start audio and press ▶.</p>
+  </header>
+
+  <div class="spec"><span class="n">390 × 844</span><span class="rule"></span><span>Phone · portrait</span></div>
+  <div class="mount" id="phone"></div>
+
+  <div id="src">
+    <h2>Source — drop an audio file anywhere on this page</h2>
+    <canvas id="srcwave" width="820" height="56"></canvas>
+    <div class="srcbtns">
+      <label>Load file<input type="file" id="file" accept="audio/*" hidden/></label>
+      <button id="mic">Audio in</button>
+      <button id="loop" class="on">Loop</button>
+      <span id="srcname">—</span>
+    </div>
+  </div>
+
+  <footer>Delaunayed · chassis in <a href="../ui/README.md">ui/</a> · desktop bench in
+    <a href="../ui/index.html">ui/index.html</a></footer>
+</div>
+
+<script src="../ui/chassis.js"></script>
+<script src="../ui/effects/wfc.js"></script>
+<script>
+/* ============================================================================
+   Audio for the WFC/Collapse chassis spec — mobile-only mount.
+
+   Same contract as prototypes/delaunay_chassis.html: the audio layer OBSERVES
+   state and the UI layer MUTATES it. sync() runs every rAF frame and writes
+   only what changed, so ui/effects/wfc.js stays audio-free.
+
+   ui/effects/wfc.js only carries what the control surface needs (a tile key,
+   a color, a label). The tile ALPHABET's sound — envelope shape, relative
+   gain, length and feedback send — lives here, ported from
+   prototypes/wfc_multitap.html, indexed to line up with DLNY.wfc._internals.TILES.
+   ========================================================================= */
+(function () {
+  'use strict';
+  var spec = DLNY.wfc, S = spec.state, I = spec._internals;
+
+  var AUDIO_TILES = [
+    { gain: 0.0,  send: 0.0,  lenK: 1.0, envc: 'flat' },  // silent
+    { gain: 0.62, send: 0.18, lenK: 1.15,envc: 'rise' },  // rise
+    { gain: 0.5,  send: 0.15, lenK: 1.4, envc: 'sus'  },  // sustain
+    { gain: 0.46, send: 0.12, lenK: 0.9, envc: 'fall' },  // fall
+    { gain: 1.0,  send: 0.30, lenK: 0.7, envc: 'acc'  },  // accent
+    { gain: 0.55, send: 1.0,  lenK: 1.1, envc: 'sus'  }   // junction
+  ];
+  var PENTA = [0, 3, 5, 7, 10, 12, 15, 17];      // minor-pentatonic spread, low lane first
+  var STEP_BEATS = [0.25, 1 / 3, 0.5, 2 / 3, 1, 2, 4];   // matches STEPDIV in ui/effects/wfc.js
+  var MAX_DELAY = 3.9;
+  var CAP_SEC = 4;
+
+  var AC = null, masterIn, dryGain, wetGain, toneFilt, masterBus, limiter, outGain,
+      echoDelay, echoFb, capNode, muteSink, capBuf, capLen, capW = 0;
+  var laneNodes = [], laneSig = [], lastLanesMeta = null, srcNode = null, buffer = null,
+      micStream = null, playing = false, lastEngine = null, lastPlayCol = -1, last = {};
+
+  function fadeTC() { return Math.max(0.004, S.glide / 1000 / 3); }
+  function set(param, value) { param.setTargetAtTime(value, AC.currentTime, fadeTC()); }
+  function stepDur() { return Math.max(0.03, STEP_BEATS[S.stepdiv] * 60 / S.bpm); }
+  function echoTime() { return Math.min(1.9, stepDur() * 3); }
+  function laneCut(i) { return 1500 + PENTA[Math.min(PENTA.length - 1, i)] * 360 + i * 140; }
+  function lanePan(i) {
+    var w = S.lanes > 1 ? (i / (S.lanes - 1)) : 0.5;
+    return Math.max(-1, Math.min(1, w * 1.5 - 0.75));
+  }
+  function laneMuted(meta) {
+    var soloed = S.lanesMeta.some(function (m) { return m.solo; });
+    return meta.mute || (soloed && !meta.solo);
+  }
+
+  /* ---------- graph ---------- */
+  function ensureAC() {
+    if (AC) return AC;
+    AC = new (window.AudioContext || window.webkitAudioContext)();
+    masterIn = AC.createGain(); dryGain = AC.createGain(); wetGain = AC.createGain();
+    toneFilt = AC.createBiquadFilter(); toneFilt.type = 'lowpass';
+    masterBus = AC.createGain();
+    limiter = AC.createDynamicsCompressor();
+    limiter.threshold.value = -6; limiter.knee.value = 6; limiter.ratio.value = 12;
+    limiter.attack.value = 0.003; limiter.release.value = 0.12;
+    outGain = AC.createGain();
+    dryGain.connect(masterBus);
+    wetGain.connect(toneFilt); toneFilt.connect(masterBus);
+    masterBus.connect(limiter); limiter.connect(outGain); outGain.connect(AC.destination);
+    masterIn.connect(dryGain);
+
+    echoDelay = AC.createDelay(2); echoFb = AC.createGain();
+    echoDelay.delayTime.value = echoTime();
+    echoDelay.connect(echoFb); echoFb.connect(echoDelay); echoDelay.connect(wetGain);
+
+    // rolling capture of whatever is feeding masterIn, for the grain engine.
+    capLen = Math.floor(CAP_SEC * AC.sampleRate); capBuf = new Float32Array(capLen); capW = 0;
+    capNode = AC.createScriptProcessor(2048, 1, 1); muteSink = AC.createGain(); muteSink.gain.value = 0;
+    masterIn.connect(capNode); capNode.connect(muteSink).connect(AC.destination);
+    capNode.onaudioprocess = function (e) {
+      var inp = e.inputBuffer.getChannelData(0);
+      for (var i = 0; i < inp.length; i++) { capBuf[capW] = inp[i]; capW = (capW + 1) % capLen; }
+    };
+    buildLaneNodes();
+    return AC;
+  }
+
+  /* ---------- single-knob FX chain (matches Chassis.rack's {t, v} shape) ---------- */
+  function makeEffect(t, v) {
+    var input = AC.createGain(), output = AC.createGain();
+    if (t === 'phaser') {
+      var N = 4, aps = [], prev = input;
+      for (var n = 0; n < N; n++) {
+        var ap = AC.createBiquadFilter(); ap.type = 'allpass'; ap.frequency.value = 600; ap.Q.value = 1;
+        prev.connect(ap); prev = ap; aps.push(ap);
+      }
+      var pw = AC.createGain(); pw.gain.value = 0.6; var pd = AC.createGain(); pd.gain.value = 0.6;
+      prev.connect(pw); pw.connect(output); input.connect(pd); pd.connect(output);
+      var lfo = AC.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = v;
+      var lg = AC.createGain(); lg.gain.value = 900;
+      lfo.connect(lg); aps.forEach(function (a) { lg.connect(a.frequency); }); lfo.start();
+      return { t: t, v: v, input: input, output: output,
+        update: function (v) { lfo.frequency.setTargetAtTime(v, AC.currentTime, 0.02); },
+        dispose: function () { try { lfo.stop(); } catch (e) {} } };
+    }
+    if (t === 'ringmod') {
+      var ring = AC.createGain(); ring.gain.value = 0;
+      var wet = AC.createGain(); wet.gain.value = 1; var dry = AC.createGain(); dry.gain.value = 0;
+      input.connect(ring); ring.connect(wet); wet.connect(output); input.connect(dry); dry.connect(output);
+      var car = AC.createOscillator(); car.type = 'sine'; car.frequency.value = v;
+      var amp = AC.createGain(); amp.gain.value = 1; car.connect(amp); amp.connect(ring.gain); car.start();
+      return { t: t, v: v, input: input, output: output,
+        update: function (v) { car.frequency.setTargetAtTime(v, AC.currentTime, 0.02); },
+        dispose: function () { try { car.stop(); } catch (e) {} } };
+    }
+    // 'grain' FX insert (echo-of-a-grain, distinct from the grain ENGINE)
+    var gd = AC.createDelay(1); gd.delayTime.value = v / 1000;
+    var fbk = AC.createGain(); fbk.gain.value = 0.45 * 0.9;
+    var gw = AC.createGain(); gw.gain.value = 0.75; var gdry = AC.createGain(); gdry.gain.value = 0.5;
+    input.connect(gd); gd.connect(fbk); fbk.connect(gd); gd.connect(gw); gw.connect(output);
+    input.connect(gdry); gdry.connect(output);
+    var glfo = AC.createOscillator(); glfo.type = 'triangle'; glfo.frequency.value = 7;
+    var glg = AC.createGain(); glg.gain.value = (v / 1000) * 0.25;
+    glfo.connect(glg); glg.connect(gd.delayTime); glfo.start();
+    return { t: t, v: v, input: input, output: output,
+      update: function (v) {
+        gd.delayTime.setTargetAtTime(v / 1000, AC.currentTime, 0.02);
+        glg.gain.setTargetAtTime((v / 1000) * 0.25, AC.currentTime, 0.02);
+      },
+      dispose: function () { try { glfo.stop(); } catch (e) {} } };
+  }
+  function buildFxChain(list) {
+    var input = AC.createGain(), output = AC.createGain(), nodes = [];
+    if (!list.length) { input.connect(output); }
+    else {
+      var prev = input;
+      list.forEach(function (f) { var e = makeEffect(f.t, f.v); prev.connect(e.input); nodes.push(e); prev = e.output; });
+      prev.connect(output);
+    }
+    return { input: input, output: output, nodes: nodes,
+      dispose: function () { nodes.forEach(function (e) { try { e.dispose(); } catch (ex) {} }); } };
+  }
+  function fxSig(list) { return list.map(function (f) { return f.t; }).join(','); }
+
+  /* ---------- lane graph: topology differs by engine ---------- */
+  function disposeLane(i) {
+    var n = laneNodes[i]; if (!n) return;
+    ['filt', 'vol', 'pan', 'input', 'delay', 'lfb', 'gate', 'send'].forEach(function (k) {
+      if (n[k]) { try { n[k].disconnect(); } catch (e) {} }
+    });
+    try { n.fx.dispose(); } catch (e) {}
+  }
+  function buildLane(i) {
+    var meta = S.lanesMeta[i];
+    var filt = AC.createBiquadFilter(); filt.type = 'lowpass'; filt.frequency.value = laneCut(i);
+    var fx = buildFxChain(meta.fx);
+    var vol = AC.createGain(); vol.gain.value = laneMuted(meta) ? 0 : meta.vol / 100;
+    var pan = AC.createStereoPanner(); pan.pan.value = lanePan(i);
+    filt.connect(fx.input); vol.connect(pan); pan.connect(wetGain);
+    var node = { filt: filt, fx: fx, vol: vol, pan: pan };
+    if (S.engine === 'grain') {
+      fx.output.connect(vol);
+      var inp = AC.createGain(); inp.gain.value = 1; inp.connect(filt);
+      node.input = inp;
+    } else {
+      var tap = Math.min(MAX_DELAY, stepDur() * (1 + i * 0.12));
+      var delay = AC.createDelay(4); delay.delayTime.value = tap;
+      var lfb = AC.createGain(); lfb.gain.value = Math.min(0.8, S.fb / 100 * 1.4);
+      var gate = AC.createGain(); gate.gain.value = 0;
+      masterIn.connect(delay); delay.connect(lfb); lfb.connect(delay); delay.connect(filt);
+      fx.output.connect(gate); gate.connect(vol);
+      var send = AC.createGain(); send.gain.value = S.fb / 100 * 0.6;
+      gate.connect(send); send.connect(echoDelay);
+      node.delay = delay; node.lfb = lfb; node.gate = gate; node.send = send;
+    }
+    laneNodes[i] = node;
+    laneSig[i] = fxSig(meta.fx);
+  }
+  function buildLaneNodes() {
+    laneNodes.forEach(function (_, i) { disposeLane(i); });
+    laneNodes = []; laneSig = [];
+    for (var i = 0; i < S.lanes; i++) buildLane(i);
+    lastLanesMeta = S.lanesMeta;
+    lastEngine = S.engine;
+  }
+
+  /* ---------- capture + envelope shaping (ported from wfc_multitap.html) ---------- */
+  function captureGrain(ms) {
+    var n = Math.max(256, Math.min(capLen, Math.floor(ms / 1000 * AC.sampleRate)));
+    var buf = AC.createBuffer(1, n, AC.sampleRate), d = buf.getChannelData(0);
+    var start = (capW - n + capLen) % capLen;
+    var fade = Math.min(Math.floor(n * 0.12), Math.floor(0.006 * AC.sampleRate));
+    for (var i = 0; i < n; i++) {
+      var s = capBuf[(start + i) % capLen];
+      if (i < fade) s *= i / fade; else if (i > n - fade) s *= (n - i) / fade;
+      d[i] = s;
+    }
+    return buf;
+  }
+  function shapeEnv(g, T, t, len, base) {
+    var eps = 0.0006;
+    g.cancelScheduledValues(t); g.setValueAtTime(0.0001, t);
+    if (T.envc === 'rise') {
+      g.linearRampToValueAtTime(base, t + len * 0.72); g.linearRampToValueAtTime(0.0001, t + len);
+    } else if (T.envc === 'sus') {
+      g.linearRampToValueAtTime(base, t + Math.min(0.03, len * 0.14));
+      g.setValueAtTime(base, t + len * 0.7); g.linearRampToValueAtTime(0.0001, t + len);
+    } else if (T.envc === 'fall') {
+      g.linearRampToValueAtTime(base, t + 0.006);
+      g.exponentialRampToValueAtTime(Math.max(eps, base * 0.02), t + len);
+      g.linearRampToValueAtTime(0.0001, t + len + 0.004);
+    } else {
+      g.linearRampToValueAtTime(base, t + 0.004);
+      g.exponentialRampToValueAtTime(Math.max(eps, base * 0.02), t + len * 0.85);
+      g.linearRampToValueAtTime(0.0001, t + len);
+    }
+  }
+  function triggerGrain(lane, tileIdx, time) {
+    var node = laneNodes[lane]; if (!node || !node.input) return;
+    var T = AUDIO_TILES[tileIdx], len = Math.max(0.03, (S.glen / 1000) * T.lenK);
+    var buf = captureGrain(S.glen * T.lenK);
+    var src = AC.createBufferSource(); src.buffer = buf; src.loop = false;
+    var env = AC.createGain(); env.gain.value = 0.0001;
+    src.connect(env); env.connect(node.input);
+    shapeEnv(env.gain, T, time, len, T.gain);
+    var send = AC.createGain(); send.gain.value = T.send * (S.fb / 100) * 1.2;
+    env.connect(send); send.connect(echoDelay);
+    src.start(time); src.stop(time + len + 0.05);
+    var kill = (len + 0.25) * 1000 + Math.max(0, (time - AC.currentTime) * 1000);
+    setTimeout(function () {
+      try { src.disconnect(); } catch (e) {}
+      try { env.disconnect(); } catch (e) {}
+      try { send.disconnect(); } catch (e) {}
+    }, kill);
+  }
+  function triggerGate(lane, tileIdx, time) {
+    var node = laneNodes[lane]; if (!node || !node.gate) return;
+    var T = AUDIO_TILES[tileIdx], len = Math.max(0.03, stepDur() * 0.96 * T.lenK);
+    shapeEnv(node.gate.gain, T, time, len, T.gain);
+  }
+  function stopGates() {
+    if (!AC) return;
+    laneNodes.forEach(function (n) { if (n.gate) n.gate.gain.setTargetAtTime(0, AC.currentTime, 0.02); });
+  }
+
+  /* ---------- step trigger: rides the chassis's own playCol, no separate clock.
+     ponytail: this fires from the rAF sync() below rather than a look-ahead
+     scheduler, so timing carries rAF jitter (~ a frame). Fine for a prototype;
+     prototypes/wfc_multitap.html's setInterval look-ahead scheduler is the
+     fix if this ever needs to be tight. ---------- */
+  function fireStep(col) {
+    for (var lane = 0; lane < S.lanes; lane++) {
+      var meta = S.lanesMeta[lane];
+      if (!meta || laneMuted(meta)) continue;
+      var tile = I.at(col, lane);
+      if (!tile) continue;   // 0 === silent
+      var time = AC.currentTime + 0.005;
+      if (S.engine === 'grain') triggerGrain(lane, tile, time); else triggerGate(lane, tile, time);
+    }
+  }
+
+  /* ---------- source ---------- */
+  function startSource() {
+    stopSource();
+    if (!buffer) return;
+    srcNode = AC.createBufferSource();
+    srcNode.buffer = buffer;
+    srcNode.loop = document.getElementById('loop').classList.contains('on');
+    srcNode.connect(masterIn);
+    srcNode.start(0);
+  }
+  function stopSource() {
+    if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode.disconnect(); srcNode = null; }
+  }
+
+  /* ---------- per-frame diff: write only what moved ---------- */
+  function sync() {
+    if (!AC) return;
+    if (S.lanesMeta !== lastLanesMeta || S.engine !== lastEngine) buildLaneNodes();
+
+    var fbChanged = S.fb !== last.fb;
+    S.lanesMeta.forEach(function (meta, i) {
+      var node = laneNodes[i]; if (!node) return;
+      var sig = fxSig(meta.fx);
+      if (sig !== laneSig[i]) {
+        var old = node.fx;
+        node.fx = buildFxChain(meta.fx);
+        node.filt.disconnect(); node.filt.connect(node.fx.input);
+        node.fx.output.connect(S.engine === 'grain' ? node.vol : node.gate);
+        try { old.dispose(); } catch (e) {}
+        laneSig[i] = sig;
+      } else {
+        node.fx.nodes.forEach(function (e, k) {
+          var v = meta.fx[k] ? meta.fx[k].v : null;
+          if (v != null && v !== e.v) { e.update(v); e.v = v; }
+        });
+      }
+      var g = laneMuted(meta) ? 0 : meta.vol / 100;
+      if (Math.abs(g - node._g) > 1e-4 || node._g === undefined) { set(node.vol.gain, g); node._g = g; }
+      if (node.lfb && fbChanged) {
+        set(node.lfb.gain, Math.min(0.8, S.fb / 100 * 1.4));
+        set(node.send.gain, S.fb / 100 * 0.6);
+      }
+    });
+
+    var bypass = S.on === false;
+    if (S.wet !== last.wet || bypass !== last.bypass) {
+      set(wetGain.gain, bypass ? 0 : S.wet / 100);
+      set(dryGain.gain, bypass ? 1 : 1 - S.wet / 100);
+    }
+    if (S.tone !== last.tone) set(toneFilt.frequency, 300 * Math.pow(18000 / 300, S.tone / 100));
+    if (S.out !== last.out) set(outGain.gain, S.out / 100);
+    if (S.fb !== last.fb) { set(echoFb.gain, S.fb / 100 * 0.9); set(echoDelay.delayTime, echoTime()); }
+
+    if (S.play !== playing) {
+      playing = S.play;
+      if (playing) { AC.resume(); startSource(); }
+      else { stopSource(); stopGates(); }
+    }
+    if (S.playCol !== lastPlayCol) {
+      lastPlayCol = S.playCol;
+      if (playing && !bypass) fireStep(S.playCol);
+    }
+
+    last.wet = S.wet; last.tone = S.tone; last.out = S.out; last.fb = S.fb; last.bypass = bypass;
+  }
+
+  /* ---------- source loading ---------- */
+  var nameEl = document.getElementById('srcname');
+  function useBuffer(buf, label) {
+    buffer = buf;
+    nameEl.textContent = label + ' · ' + buf.duration.toFixed(1) + 's';
+    drawWave(buf);
+    if (playing) startSource();
+  }
+  // A short rhythmic loop so the page has something to process with no
+  // network and no base64. Load a real file for anything serious.
+  function synthBuffer() {
+    var sr = AC.sampleRate, dur = 2, buf = AC.createBuffer(1, sr * dur, sr);
+    var d = buf.getChannelData(0), notes = [0, 0, 3, 5, 7];
+    notes.forEach(function (semi, n) {
+      var f = 130 * Math.pow(2, semi / 12), start = Math.floor(n * 0.4 * sr);
+      for (var i = 0; i < sr * 0.35 && start + i < d.length; i++) {
+        var t = i / sr, env = Math.exp(-t * 9);
+        d[start + i] += env * 0.3 *
+          (Math.sin(2 * Math.PI * f * t) + 0.3 * Math.sin(2 * Math.PI * f * 4 * t) * Math.exp(-t * 18));
+      }
+    });
+    return buf;
+  }
+  function loadDefault() {
+    fetch('../assets/audio/00_dry_source.wav')
+      .then(function (r) { if (!r.ok) throw 0; return r.arrayBuffer(); })
+      .then(function (a) { return AC.decodeAudioData(a); })
+      .then(function (b) { useBuffer(b, 'marimba (repo asset)'); })
+      .catch(function () { useBuffer(synthBuffer(), 'built-in loop'); });
+  }
+  function drawWave(buf) {
+    var cv = document.getElementById('srcwave'), g = cv.getContext('2d');
+    var d = buf.getChannelData(0), step = Math.floor(d.length / cv.width) || 1;
+    g.fillStyle = '#0c1018'; g.fillRect(0, 0, cv.width, cv.height);
+    g.strokeStyle = '#5ad1c8'; g.lineWidth = 1; g.beginPath();
+    for (var x = 0; x < cv.width; x++) {
+      var peak = 0;
+      for (var i = 0; i < step; i++) peak = Math.max(peak, Math.abs(d[x * step + i] || 0));
+      g.moveTo(x + .5, cv.height / 2 - peak * cv.height / 2);
+      g.lineTo(x + .5, cv.height / 2 + peak * cv.height / 2);
+    }
+    g.stroke();
+  }
+
+  /* ---------- page wiring ---------- */
+  document.getElementById('file').addEventListener('change', function (e) {
+    var f = e.target.files[0]; if (!f) return;
+    ensureAC();
+    f.arrayBuffer().then(function (a) { return AC.decodeAudioData(a); })
+      .then(function (b) { useBuffer(b, f.name); });
+  });
+  document.getElementById('loop').addEventListener('click', function () {
+    this.classList.toggle('on');
+    if (srcNode) srcNode.loop = this.classList.contains('on');
+  });
+  document.getElementById('mic').addEventListener('click', function () {
+    var btn = this;
+    ensureAC();
+    if (micStream) {
+      micStream.getTracks().forEach(function (t) { t.stop(); });
+      micStream = null; btn.classList.remove('on'); nameEl.textContent = 'mic off';
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false } })
+      .then(function (st) {
+        micStream = st;
+        var n = AC.createMediaStreamSource(st);
+        n.connect(masterIn);
+        btn.classList.add('on');
+        nameEl.textContent = 'audio in · live';
+      })
+      .catch(function () { nameEl.textContent = 'mic denied'; });
+  });
+  var srcBox = document.getElementById('src');
+  ['dragover', 'dragenter'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); srcBox.classList.add('drag'); });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    document.addEventListener(ev, function (e) { e.preventDefault(); srcBox.classList.remove('drag'); });
+  });
+  document.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files[0]; if (!f) return;
+    ensureAC();
+    f.arrayBuffer().then(function (a) { return AC.decodeAudioData(a); })
+      .then(function (b) { useBuffer(b, f.name); });
+  });
+
+  // Browsers only start an AudioContext inside a user gesture, and the chassis
+  // transport runs in one — but the context has to exist before that, so take
+  // the first pointer anywhere on the page.
+  document.addEventListener('pointerdown', function () { ensureAC(); AC.resume(); loadDefault(); }, { once: true });
+
+  window.DLNY_AUDIO = { sync: sync };
+})();
+
+/* ---------- mount the phone body only, one loop ---------- */
+var api = Chassis.mount(document.getElementById('phone'), DLNY.wfc, 'phone');
+
+var t0 = performance.now();
+(function loop(t) {
+  var spec = DLNY.wfc;
+  if (spec.tick(spec.state, (t - t0) / 1000)) api.paint();
+  DLNY_AUDIO.sync();
+  requestAnimationFrame(loop);
+})(t0);
+</script>
+</body>
+</html>

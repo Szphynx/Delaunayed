@@ -44,6 +44,7 @@ that approximates the sonic direction. **Dry reference:** [`assets/audio/00_dry_
 
 🔊 [`assets/audio/02_wfc_multitap.wav`](assets/audio/02_wfc_multitap.wav)
 &nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/wfc_multitap.html`](prototypes/wfc_multitap.html) — real animated WFC solver, learn-from-example, grain + gated-multitap engines (write-up in the prototyping section below).
+&nbsp;·&nbsp; 📱 **Mobile prototype:** [`prototypes/wfc_chassis.html`](prototypes/wfc_chassis.html) — the same engine on the DLNY phone chassis, portrait-only.
 
 - **Math:** Grid = time-steps × tap-lanes. "Tiles" = tap states (`rise`, `sustain`, `fall`,
   `accent`, `silent`, `feedback-junction`). **Adjacency constraints** enforce musical logic.

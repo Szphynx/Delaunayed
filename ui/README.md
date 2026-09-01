@@ -16,6 +16,7 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
 | `index.html` | Host page and effect picker. Copy it to start a new device. |
 | *(consumer)* | [`../prototypes/delaunay_chassis.html`](../prototypes/delaunay_chassis.html) — the same spec with a real WebAudio engine attached. |
+| *(consumer)* | [`../prototypes/wfc_chassis.html`](../prototypes/wfc_chassis.html) — `wfc` spec, phone body only, with a real WebAudio engine (grain capture + gated multitap) attached. |
 | `test_chassis.js` | `node ui/test_chassis.js` — 29 checks, no framework. |
 
 Classic scripts, not ES modules: the prototypes open straight off disk by double-click
