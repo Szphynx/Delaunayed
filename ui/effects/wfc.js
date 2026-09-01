@@ -144,6 +144,27 @@ var DLNY = window.DLNY || (window.DLNY = {});
       ];
     },
 
+    // Lane faders live in the LVL strips, which declare no controls.
+    randomize: function (s) {
+      return s.lanesMeta.map(function (m) {
+        return { obj: m, key: 'vol', min: 0, max: 100 };
+      });
+    },
+
+    // The tile map is the patch. Amount reads here as the share of cells that
+    // get re-thrown — same distribution reseed() uses — so one knob nudges the
+    // pattern and the mix together instead of the grid being all-or-nothing
+    // behind the Collapse button. Grid size stays put: changing it reseeds.
+    roll: function (s, amount, rand) {
+      var moved = 0, i;
+      for (i = 0; i < s.cells.length; i++) {
+        if (rand() * 100 >= amount) continue;
+        s.cells[i] = rand() < 0.52 ? 0 : 1 + Math.floor(rand() * (TILES.length - 1));
+        moved++;
+      }
+      return moved;
+    },
+
     pages: {
       MIX: {
         context: function () { return 'Master bus'; },

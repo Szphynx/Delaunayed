@@ -386,6 +386,38 @@ var DLNY = window.DLNY || (window.DLNY = {});
       ];
     },
 
+    // What the dice reaches that no page declares. TAP binds only the selected
+    // tap and LVL binds none, so without this a roll would move one tap out of
+    // fourteen and the patch would barely change.
+    randomize: function (s) {
+      var list = [];
+      s.pts.forEach(function (p) {
+        list.push({ obj: p, key: 'div',   min: 0,    max: DIVS.length - 1 },
+                  { obj: p, key: 'pitch', min: -12,  max: 12 },
+                  { obj: p, key: 'vol',   min: 0,    max: 100 },
+                  { obj: p, key: 'fb',    min: 0,    max: 90 },
+                  { obj: p, key: 'pan',   min: -100, max: 100 },
+                  { obj: p, key: 'cut',   min: 300,  max: 18000 });
+      });
+      return list;
+    },
+
+    // Geometry is a parameter here, just not a slider — where a tap sits sets
+    // which triangle the head is in and how it is weighted. Jittering by the
+    // same amount is the difference between a patch that comes back rearranged
+    // and one that only comes back retuned. Tap count is left alone: it is
+    // regen()'s to change, and regen() would discard the roll.
+    roll: function (s, amount, rand) {
+      if (!amount) return 0;
+      var d = amount / 100 * 0.5;              // half the plane at full throw
+      s.pts.forEach(function (p) {
+        p.x = Math.max(0.03, Math.min(0.97, p.x + (rand() * 2 - 1) * d));
+        p.y = Math.max(0.03, Math.min(0.97, p.y + (rand() * 2 - 1) * d));
+      });
+      retriangulate();
+      return s.pts.length;
+    },
+
     pages: {
       MIX: {
         context: function () { return 'Master bus'; },

@@ -12,6 +12,7 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 |---|---|
 | `chassis.css` | All device chrome, both bodies. Scoped under `.dlny`, dark-only. |
 | `chassis.js` | `Chassis.mount(host, spec, 'phone'\|'rack')` + the reusable page bodies. |
+| `randomize.js` | `Randomize.mount()` — the dice button and its amount knob, plus the model behind them. The chassis mounts it into the transport itself; the four single-file prototypes inline a copy that rolls their `<input type=range>` sliders instead. Keep the copies in sync. |
 | `audio-session.js` | `AudioSession.unlock()/.attach()/.decode()` — keeps WebAudio audible on iOS, and decodes AIFF/AIFC, which only Safari takes natively. Inlined verbatim in the four single-file prototypes; keep the copies in sync. |
 | `effects/delaunay.js` | Engine A of `prototypes/delaunay_delay.html`, as a spec. |
 | `effects/wfc.js` | `prototypes/wfc_multitap.html`, as a spec. Second consumer — keeps the chassis honest. |
@@ -20,6 +21,7 @@ at 1:1. Run the self-check with `node ui/test_chassis.js`.
 | *(consumer)* | [`../prototypes/wfc_chassis.html`](../prototypes/wfc_chassis.html) — `wfc` spec, phone body only, with a real WebAudio engine (grain capture + gated multitap) attached. |
 | `test_chassis.js` | `node ui/test_chassis.js` — 29 checks, no framework. |
 | `test_audio_session.js` | `node ui/test_audio_session.js` — 8 checks on the AIFF parser, no fixtures on disk. |
+| `test_randomize.js` | `node ui/test_randomize.js` — 21 checks on the dice: the window, the step, the structural opt-out. |
 
 Classic scripts, not ES modules: the prototypes open straight off disk by double-click
 and `file://` blocks module imports. There is no build step and no dependency.
@@ -101,6 +103,57 @@ var DLNY = window.DLNY || (window.DLNY = {});
 `Chassis.fmt` has `raw`, `pct`, `ms`, `db`, `hz` (1000 → `1.0k`), `pan` (0 → `C`,
 −40 → `L40`), and `list(array)` for sliders that step through labels — note divisions,
 tile names, scale degrees.
+
+---
+
+## The dice
+
+One button in the transport rolls **every** parameter of the mounted spec, and the
+knob beside it is how far it may throw: the share of each control's own range the
+roll may land in, centred on where that control is now. 15% nudges a patch you like;
+100% replaces it; 0% is a no-op. The window is *reflected* off the ends of a range
+rather than clipped, or a value already at its maximum could only ever be thrown
+downwards and repeated presses would walk every patch to the middle. Each slider
+draws the slice it can reach behind its own track (`--rlo`/`--rhi` in `chassis.css`),
+so the knob answers "how random is 40%?" on the page itself.
+
+A spec gets this for free — `Chassis.randomizable(spec)` walks *every* page's
+`controls`, not just the tab that happens to be open. Two hooks cover what a control
+list can't say:
+
+```js
+// Extra descriptors, same shape as a page's controls, for values no page binds.
+// `controls` only ever binds the *selected* tap or lane, and strips/rack pages
+// bind nothing — without this a roll would move one tap out of fourteen.
+randomize: function (s) {
+  return s.pts.map(function (p) { return { obj: p, key: 'div', min: 0, max: 11 }; });
+},
+
+// Whatever isn't a numeric range: a tile map, a constellation, a geometry.
+// Return how many values you moved.
+roll: function (s, amount, rand) { … }
+```
+
+**Structural controls are excluded**, and that is the rule worth remembering: anything
+carrying `commit: 'change'` changes the element count, so rolling it regenerates the
+very taps or lanes the same roll just set. `rnd: true` on a control opts one back in;
+`rnd: false` opts any control out. A DOM slider does the same with `data-rnd="off"`.
+
+Both bodies share one knob, because the amount lives on `spec.state.rnd` — same
+reason `s.tab` does. `spec.state.rnd` is the source of truth and the knob is its
+view, so a preset that carries an amount takes effect on the next render.
+
+The cluster lives *outside* the part of the transport that `buildTransport()` empties.
+A roll re-renders, and a knob you are dragging must not be rebuilt out from under
+your thumb.
+
+The four single-file prototypes inline a copy that rolls their `<input type=range>`
+sliders directly — it sets each one and fires `input` + `change`, so whatever the page
+already wired to those events does the work and nothing in the dice knows what a
+slider means. That copy leaves the per-slider band out: those are the browser's native
+sliders, and Chrome paints them over anything the element paints behind them. There the
+knob's arc and readout are the range display. Everything else is byte-identical, the CSS
+block included — keep it that way.
 
 ---
 

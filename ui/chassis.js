@@ -49,6 +49,11 @@ var Chassis = (function () {
     r.style.setProperty('--p', (((r.value - r.min) / span) * 100).toFixed(1) + '%');
   }
 
+  // ui/randomize.js is optional — the chassis mounts and renders without it,
+  // just with no dice in the transport. Looked up on each use rather than
+  // captured, so load order between the two script tags doesn't matter.
+  function RND() { return typeof Randomize !== 'undefined' ? Randomize : null; }
+
   /* ---------- registry: every mount of a spec renders together ---------- */
   var mounts = new WeakMap();
   function peers(spec) {
@@ -160,12 +165,17 @@ var Chassis = (function () {
     r.value = c.obj[c.key];
     r.setAttribute('aria-label', c.label);
     fillTrack(r);
+    // Structural controls (element count, grid size) are the ones the dice must
+    // leave alone: rolling them regenerates the very taps or lanes the same
+    // roll just set. `rnd: true` opts one back in, `rnd: false` opts any out.
+    if (c.rnd === false || (c.commit === 'change' && c.rnd !== true)) r.setAttribute('data-rnd', 'off');
     var format = c.fmt || fmt.raw;
     var v = el('span', 'v', format(c.obj[c.key]));
     r.oninput = function () {
       c.obj[c.key] = +r.value;
       v.textContent = format(c.obj[c.key]);
       fillTrack(r);
+      if (RND()) RND().band(r, api.state.rnd || 0);
       if (c.commit === 'change') return;      // heavy work waits for pointerup
       if (c.onInput) c.onInput(r.value, api);
       if (onLabelChange) onLabelChange();
@@ -183,6 +193,43 @@ var Chassis = (function () {
     return row;
   }
 
+  /* ---------- what one dice press may touch ----------
+     Every page's controls, not just the page you happen to be looking at —
+     the point of a global dice is that it doesn't matter which tab is up.
+     Pages built from `render` (strips, insert racks) declare nothing, and a
+     `controls` list only ever binds the *selected* tap or lane, so a spec adds
+     the rest through `randomize(s)`: same descriptor shape, no page. */
+  function randomizable(spec) {
+    var s = spec.state, out = [];
+    function add(c) {
+      if (!c || !c.obj || !(c.key in c.obj)) return;
+      if (c.rnd === false || (c.commit === 'change' && c.rnd !== true)) return;
+      if (!(+c.max > +c.min)) return;
+      // A page control and a spec extra can name the same value; rolling it
+      // twice would give it a wider spread than the knob says.
+      for (var i = 0; i < out.length; i++) {
+        if (out[i].obj === c.obj && out[i].key === c.key) return;
+      }
+      out.push(c);
+    }
+    (spec.tabs || Object.keys(spec.pages)).forEach(function (t) {
+      var p = spec.pages[t];
+      if (p && p.controls) p.controls(s).forEach(add);
+    });
+    if (spec.randomize) spec.randomize(s).forEach(add);
+    return out;
+  }
+
+  // Rolls the descriptors, then hands the spec its own turn for whatever isn't
+  // a numeric range — a tile map, a constellation. Returns values moved.
+  function roll(spec, amount, rand) {
+    var R = RND();
+    if (!R) return 0;
+    var moved = R.apply(randomizable(spec), amount, rand);
+    if (spec.roll) moved += spec.roll(spec.state, amount, rand || Math.random) || 0;
+    return moved;
+  }
+
   /* ---------- mount ---------- */
   var VARIANTS = {
     phone: { canvas: [390, 352], tabsCls: 'tabrow', bodyCls: 'pbody',
@@ -197,6 +244,9 @@ var Chassis = (function () {
     var s = spec.state;
     var tabs = spec.tabs || Object.keys(spec.pages);
     if (!s.tab || tabs.indexOf(s.tab) < 0) s.tab = tabs[0];
+    // The dice amount lives on the spec state, not the mount, so both bodies
+    // show the same knob — same reason s.tab does.
+    if (typeof s.rnd !== 'number') s.rnd = RND() ? RND().DEFAULT_AMOUNT : 0;
 
     host.className = 'dlny ' + (variant === 'phone' ? 'phone' : 'rack632');
     host.textContent = '';
@@ -206,6 +256,8 @@ var Chassis = (function () {
     var tabHost = el('div', V.tabsCls);
     tabHost.setAttribute('role', 'tablist');
     var transport = el('div', V.transportCls);
+    var tbar = el('div', 'tbar');            // spec buttons; rebuilt every render
+    transport.appendChild(tbar);             // the dice cluster is appended after
     var body = el('div', V.bodyCls);
     var readout = el('div', V.readoutCls);
 
@@ -246,13 +298,35 @@ var Chassis = (function () {
     }
 
     function buildTransport() {
-      transport.textContent = '';
+      tbar.textContent = '';
       (spec.transport ? spec.transport(s) : []).forEach(function (t) {
         var b = el('button', 'tbtn' + (t.accent ? ' acc' : '') + (t.on ? ' on' : ''), t.label);
         if (t.title) b.title = t.title;
         b.setAttribute('aria-pressed', !!t.on);
         b.onclick = function () { t.tap(s, api); api.render(); };
-        transport.appendChild(b);
+        tbar.appendChild(b);
+      });
+    }
+
+    // Built once and left alone: the knob must survive the re-render that a
+    // dice press causes, or the first roll would tear it out from under you.
+    function buildDice() {
+      var R = RND();
+      if (!R) return null;
+      return R.mount(transport, {
+        amount: s.rnd,
+        size: variant === 'phone' ? 30 : 20,
+        // s.rnd is the source of truth and the knob is its view, so a preset
+        // that loads an amount takes effect on the next render rather than the
+        // press after that.
+        roll: function () { roll(spec, s.rnd); api.render(); },
+        onAmount: function (amount) {
+          s.rnd = amount;
+          peers(spec).forEach(function (o) {
+            if (o._dice) o._dice.set(amount);
+            if (o._bands) o._bands();
+          });
+        }
       });
     }
 
@@ -330,8 +404,13 @@ var Chassis = (function () {
     }
 
     var m = {
+      // Every slider shows the slice of its own range the dice can reach, so
+      // turning the knob answers "how random is 40%?" on the page itself.
+      _bands: function () { if (RND()) RND().bands(body, s.rnd); },
       _draw: function () {
         buildTabs(); buildTransport(); buildBody();
+        if (m._dice) m._dice.set(s.rnd);
+        m._bands();
         if (variant === 'phone') pw.classList.toggle('off', s.on === false);
         m._paint();
       },
@@ -356,12 +435,14 @@ var Chassis = (function () {
     }).concat(m));
 
     wireCanvas();
+    m._dice = buildDice();
     m._draw();
     return api;
   }
 
   return { mount: mount, el: el, pad: pad, fmt: fmt, fillTrack: fillTrack,
-           strips: strips, rack: rack, controlRow: controlRow, VARIANTS: VARIANTS };
+           strips: strips, rack: rack, controlRow: controlRow, VARIANTS: VARIANTS,
+           randomizable: randomizable, roll: roll };
 })();
 
 if (typeof module !== 'undefined' && module.exports) module.exports = Chassis;

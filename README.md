@@ -175,14 +175,19 @@ learn-from-example hook — both are the quickest to a playable result in any la
 ### ▷ Start here — the gallery hub
 
 **[`index.html`](index.html)** is the entry point: a brutalist index page with a live **Quick-Play
-mini-instrument** (Play · Delay/Freeze · Tempo · Dry/Wet · Feedback · Tone — real Web Audio, marimba
-embedded), a launch card for the full device, the two **source clips**, and all **five concept
+mini-instrument** (Play · Delay/Freeze · Tempo · Dry/Wet · Feedback · Tone · **Dice** — real Web Audio,
+marimba embedded), a launch card for the full device, the two **source clips**, and all **five concept
 diagrams + audio demos** in one place. Open it from the project folder so the `assets/` diagrams and
 audio resolve:
 
 ```bash
 open index.html
 ```
+
+Every prototype on this page carries the same **dice**: one press re-throws all of its parameters, and
+the knob beside it is how far a roll may throw — the share of each control's own range it may land in,
+centred on where that control is now. Turn it down to nudge a patch you already like; turn it up to be
+handed a different one. Shared implementation in [`ui/randomize.js`](ui/randomize.js).
 
 ### ▶ Live interactive prototype — two engines
 
@@ -343,6 +348,7 @@ sub-patchers).
 | **Auto-drift** | on/off | Hands-free Lissajous sweep of the playhead across the map. |
 | **Regenerate** | — | New random constellation (rejection-sampled spacing), re-triangulated. |
 | **💾 Save / 📁 Load** | — | Save/restore the whole patch as ~2 KB JSON (also accepts a dropped `.json`). |
+| **Dice + amount knob** | 0-100% · 35% | One press re-throws every parameter on the page. The knob is how far it may throw — the share of each control's own range it may land in, centred on where that control is now, so 15% nudges the patch and 100% replaces it. At 0% the dice does nothing. Structural controls (**Taps**) are left alone: rolling them would regenerate the very taps the same roll just set. |
 | **Tempo** | 40–220 BPM · 110 | The single clock every tap aligns to; delay time = `division × 60/BPM`, so changing it rescales the whole constellation live. |
 
 *Engine* — the two read-outs of the one point set
@@ -483,6 +489,7 @@ control-rate core** that drops into `js`/`node.script`, exactly as the README's 
 | **↻ Re-seed** | — | Clears locks and collapses fresh → a new coherent variation from the same rules. |
 | **Regenerate** | — | Rebuilds the grid at the current Steps × Lanes and collapses. |
 | **💾 Save / 📁 Load** | — | Save/restore everything — grid, locks, learned ruleset, every lane's params + FX — as compact JSON. |
+| **Dice + amount knob** | 0-100% · 35% | One press re-throws every parameter on the page. The knob is how far it may throw — the share of each control's own range it may land in, centred on where that control is now, so 15% nudges the patch and 100% replaces it. At 0% the dice does nothing. Structural controls (**Steps**, **Lanes**) are left alone: rolling them would regenerate the very grid the same roll just set. |
 | **Tempo** | 40–220 BPM · 132 | The clock the playhead sweeps at. |
 | **Step** | `1/16 … 1/4` (7 divisions) · 1/16 | Duration of one grid column = one sequencer step. |
 
