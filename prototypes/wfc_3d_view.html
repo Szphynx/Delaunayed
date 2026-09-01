@@ -21,6 +21,7 @@
          transform:rotateX(-24deg) rotateY(-30deg)}
   .cube{position:absolute;transform-style:preserve-3d;left:0;top:0}
   .face{position:absolute;left:0;top:0;box-shadow:inset 0 0 0 1px rgba(0,0,0,.55)}
+  .particle{position:absolute;left:0;top:0;border-radius:50%;pointer-events:none;mix-blend-mode:screen}
   .hint{position:absolute;left:8px;bottom:6px;font-size:10px;color:#555;letter-spacing:.05em;text-transform:uppercase;pointer-events:none}
 
   .panel{background:var(--panel);border:1px solid #2e2e2e;padding:16px 18px;width:260px;flex:0 0 auto}
@@ -156,6 +157,10 @@ function depthFor(col, lane){
   var extra = t === JUNCTION ? fbPush * 1.5 : (t !== 0 ? fbPush * 0.3 : 0);
   return -30 - extra;
 }
+function cubePos(col, lane){
+  var originX = -((ST.cols-1)*SP)/2, originY = -((ST.lanes-1)*SP)/2;
+  return { x: originX + col*SP, y: originY + lane*SP, z: depthFor(col,lane) };
+}
 function placeCube(c, x, y, z, s){
   s = s === undefined ? 1 : s;
   c.el.style.transform = 'translate3d('+(x-HALF)+'px,'+(y-HALF)+'px,'+z+'px) scale('+s+')';
@@ -226,6 +231,57 @@ function animScale(c, from, to, dur, done){
   })(t0);
 }
 
+/* ---------------- waveform-out: reads audio, owns none of it ----------------
+   Every fired voice hands this module an AnalyserNode tap plus its own 3D
+   position and color. This module only reads samples off that tap and turns
+   them into a rising trail of particles — it never builds oscillators, gain
+   envelopes, panners, or touches the synth graph. Sound is made in the audio
+   section below; this just shows it happening, from wherever it happened. */
+var WaveOut = (function(){
+  var voices = [];   // {analyser, buf, pos, color, until, lastSpawn}
+  var particles = []; // {el, x, y, z, wig, born, life}
+
+  function watch(analyser, pos, color, durSeconds){
+    voices.push({ analyser: analyser, buf: new Uint8Array(analyser.fftSize),
+                   pos: pos, color: color, until: performance.now() + durSeconds*1000, lastSpawn: 0 });
+  }
+
+  function spawn(pos, color, norm, mag){
+    var el = document.createElement('div');
+    el.className = 'particle';
+    var size = 3 + mag*11;
+    el.style.width = size+'px'; el.style.height = size+'px';
+    el.style.background = color;
+    el.style.boxShadow = '0 0 ' + (4+mag*16) + 'px ' + color;
+    stage.appendChild(el);
+    particles.push({ el: el, x: pos.x, y: pos.y - HALF - 4, z: pos.z,
+                      wig: norm*20, born: performance.now(), life: 620 + mag*260 });
+  }
+
+  function update(now){
+    var i;
+    for (i = voices.length-1; i >= 0; i--) {
+      var v = voices[i];
+      if (now > v.until) { voices.splice(i,1); continue; }
+      if (now - v.lastSpawn < 16) continue;
+      v.lastSpawn = now;
+      v.analyser.getByteTimeDomainData(v.buf);
+      var mid = v.buf[Math.floor(v.buf.length/2)], peak = 0, k;
+      for (k = 0; k < v.buf.length; k++) { var d = Math.abs(v.buf[k]-128)/128; if (d > peak) peak = d; }
+      spawn(v.pos, v.color, (mid-128)/128, peak);
+    }
+    for (i = particles.length-1; i >= 0; i--) {
+      var p = particles[i], age = now - p.born, t = age/p.life;
+      if (t >= 1) { p.el.remove(); particles.splice(i,1); continue; }
+      var x = p.x + p.wig*(1-t*0.4), y = p.y - t*76, z = p.z + t*95;
+      p.el.style.opacity = (1-t).toFixed(2);
+      p.el.style.transform = 'translate3d('+(x-HALF/2)+'px,'+(y-HALF/2)+'px,'+z+'px)';
+    }
+  }
+
+  return { watch: watch, update: update };
+})();
+
 /* ---------------- audio: 3D-panned synth voices ---------------- */
 var actx = null, listener = null, master = null;
 function ensureAudio(){
@@ -252,6 +308,10 @@ function triggerVoice(col, lane){
   var freq = SCALE[lane % SCALE.length];
   var g = actx.createGain(); g.gain.value = 0;
   var pan = panFor(col, lane);
+  var out = actx.createGain(); out.gain.value = 1;   // tap point for WaveOut, ahead of the panner
+  var analyser = actx.createAnalyser(); analyser.fftSize = 64;
+  out.connect(pan); out.connect(analyser); pan.connect(master);
+  var pos = cubePos(col, lane), color = TILES[tile].c;
   var t = actx.currentTime, amp = 0.22 * (meta.vol/100);
 
   if (tile === JUNCTION) {
@@ -259,10 +319,11 @@ function triggerVoice(col, lane){
     var delay = actx.createDelay(1.0); delay.delayTime.value = 0.16;
     var fbGain = actx.createGain(); fbGain.gain.value = Math.min(0.85, ST.fb/100);
     osc.connect(g); g.connect(delay); delay.connect(fbGain); fbGain.connect(delay);
-    delay.connect(pan); g.connect(pan); pan.connect(master);
+    delay.connect(out); g.connect(out);
     g.gain.linearRampToValueAtTime(amp, t+0.01);
     g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
     osc.start(t); osc.stop(t+1.4);
+    WaveOut.watch(analyser, pos, color, 1.3);
     return;
   }
 
@@ -273,11 +334,12 @@ function triggerVoice(col, lane){
   if (tile === 3) { f0 = freq*1.5; f1 = freq*0.75; }  // fall: glide down
   osc.frequency.setValueAtTime(f0, t);
   osc.frequency.linearRampToValueAtTime(f1, t + (tile===2 ? 0.3 : 0.14));
-  osc.connect(g); g.connect(pan); pan.connect(master);
+  osc.connect(g); g.connect(out);
   var dur = tile === 2 ? 0.42 : (tile === 4 ? 0.09 : 0.16); // sustain longest, accent shortest
   g.gain.linearRampToValueAtTime(amp * (tile===4 ? 1.4 : 1), t+0.008);
   g.gain.exponentialRampToValueAtTime(0.001, t+dur);
   osc.start(t); osc.stop(t+dur+0.05);
+  WaveOut.watch(analyser, pos, color, dur + 0.05);
 }
 
 /* ---------------- transport tick ---------------- */
@@ -292,6 +354,7 @@ function tick(now){
     }
   }
   refreshVisual();
+  WaveOut.update(now);
   updateReadout();
   requestAnimationFrame(tick);
 }
