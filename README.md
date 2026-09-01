@@ -176,6 +176,15 @@ spec in ways worth naming rather than quietly overwriting:
   (that augmented 2nd) and Japanese **hirajōshi**, plus a root-semitone transposition. The script
   asserts every key-locked render uses only degrees of its key, and prints which degrees the geometry
   never reached (hirajōshi never lands on its 2nd at 34°) rather than hiding it.
+- **Presets on a tonal source:** [`07_tonal_dry_Am.wav`](assets/audio/07_tonal_dry_Am.wav) is a held A drone
+  with a slow pentatonic arpeggio — long notes, so deep branches land while the source still sounds and the
+  result is harmony, not echo. Five presets: [`cathedral`](assets/audio/07_preset_cathedral.wav),
+  [`drone_web`](assets/audio/07_preset_drone_web.wav), [`koto_rain`](assets/audio/07_preset_koto_rain.wav),
+  [`hijaz_veil`](assets/audio/07_preset_hijaz_veil.wav), [`fifths`](assets/audio/07_preset_fifths.wav).
+  The sketch measures **in-key tail energy** (share of the tail's spectrum on degrees of the key, after the
+  source stops): key-locked presets land **83–96%**, against **44.6%** for
+  [the same tree with free 12-TET intervals](assets/audio/07_control_free_12tet.wav). Nothing hits 100% —
+  varispeed shifts a node's harmonics with it, and a 5th harmonic is a major third the scale may not contain.
 - **Control demo:** `z_flat_control` is the same node count with linear times and no
   inheritance — a plain multitap. It's the A/B that justifies the architecture.
 - **Effort:** Low. Node list is control-rate; `poly~` of delay voices renders it.

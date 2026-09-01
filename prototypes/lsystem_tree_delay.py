@@ -45,7 +45,9 @@ KEYS = {"minor_pentatonic": [0, 3, 5, 7, 10],            # semitone degrees
         "major":            [0, 2, 4, 5, 7, 9, 11],
         "phrygian":         [0, 1, 3, 5, 7, 8, 10],   # flat 2nd, Spanish darkness
         "hijaz":            [0, 1, 4, 5, 7, 8, 11],   # maqam Hijaz: the augmented 2nd
-        "hirajoshi":        [0, 2, 3, 7, 8]}          # Japanese koto pentatonic
+        "hirajoshi":        [0, 2, 3, 7, 8],          # Japanese koto pentatonic
+        "fifths":           [0, 7],                   # stacked fifths only
+        "octaves":          [0]}                      # pure octave ladder
 
 def snap_key(cents, degrees, root_semi):
     """Absolute snap: nearest degree of a fixed key, any octave. Key is
@@ -123,6 +125,50 @@ def render(x, nodes, tail=3.0, grow_time=0.0, wet=0.9):
         y[:, 1] += g * tap * r
     dry = np.stack([xp, xp], axis=1)
     return 0.6 * dry + wet * y / math.sqrt(len(nodes))
+
+# ---------------------------------------------------- a tonal test source
+def tonal_source(dur=8.0, root=110.0, seq=(0, 3, 7, 10, 12, 7, 3, 0)):
+    """A minor: a held root drone under a slow pentatonic arpeggio. Long notes,
+    so the tree's branches overlap and the harmony is actually audible —
+    a marimba pluck decays before the deep branches ever arrive."""
+    n = int(dur * SR); t = np.arange(n) / SR
+    y = np.zeros(n)
+    # drone: root + fifth, gentle detune, slow swell
+    for f, g in ((root, 0.5), (root * 1.5, 0.22), (root * 2, 0.16)):
+        y += g * np.sin(2 * np.pi * f * t + 0.4 * np.sin(2 * np.pi * 0.13 * t))
+    y *= np.clip(t / 1.2, 0, 1) * np.clip((dur - t) / 1.5, 0, 1)
+    # arpeggio on top, each note ringing ~1.6 s
+    step = dur / (len(seq) + 1)
+    for k, semi in enumerate(seq):
+        f = root * 4 * 2 ** (semi / 12)
+        i = int((0.4 + k * step) * SR)
+        m = int(1.6 * SR); m = min(m, n - i)
+        if m <= 0: continue
+        tt = np.arange(m) / SR
+        v = (np.sin(2 * np.pi * f * tt) + 0.4 * np.sin(2 * np.pi * 2 * f * tt)
+             + 0.18 * np.sin(2 * np.pi * 3 * f * tt))
+        v *= np.exp(-1.6 * tt) * np.clip(tt / 0.02, 0, 1)
+        y[i:i + m] += 0.5 * v
+    return y / (np.max(np.abs(y)) + 1e-9) * 0.85
+
+# --------------------------------------------------- is the tail in key?
+def in_key_share(y, degrees, root_hz=110.0):
+    """Share of tail energy sitting on pitch classes of the key. Chroma of the
+    part after the source has stopped: honest check on 'sounds harmonious'."""
+    x = y.mean(axis=1) if y.ndim > 1 else y
+    seg = x[int(6.0 * SR):]
+    if len(seg) < 4096:
+        return float("nan")
+    mag = np.abs(np.fft.rfft(seg * np.hanning(len(seg))))
+    freq = np.fft.rfftfreq(len(seg), 1 / SR)
+    band = (freq > 60) & (freq < 5000)
+    mag, freq = mag[band], freq[band]
+    cents = 1200 * np.log2(freq / root_hz)
+    pc = np.round(cents / 100).astype(int) % 12
+    off = np.abs(cents / 100 - np.round(cents / 100))     # how close to a semitone
+    weight = mag ** 2 * (off < 0.25)                      # ignore energy between semitones
+    total = weight.sum() + 1e-12
+    return float(sum(weight[pc == d].sum() for d in degrees) / total)
 
 # ------------------------------------------------------------ the diagram
 def svg(nodes, path, caption=""):
@@ -205,6 +251,42 @@ if __name__ == "__main__":
     write_wav("06_lsystem_z_flat_control.wav", render(dry, flat))
     svg(flat, os.path.join(IMG, "06_lsystem_z_flat_control.svg"),
         "same node budget, laid out linearly | no inheritance, no pitch")
+
+    # ---------------- presets on a sustained tonal source (A minor) --------
+    tonal = tonal_source()
+    write_wav("07_tonal_dry_Am.wav", np.stack([tonal, tonal], axis=1))
+
+    PRESETS = {
+        "cathedral":  dict(key="minor_pentatonic", angle=34, ratio=0.88, base_len=0.45,
+                           decay=0.82, branch=2),
+        "hijaz_veil": dict(key="hijaz", angle=40, ratio=0.90, base_len=0.30,
+                           decay=0.80, branch=2),
+        "koto_rain":  dict(key="hirajoshi", angle=26, ratio=0.70, base_len=0.22,
+                           decay=0.74, branch=3, max_depth=5),
+        "fifths":     dict(key="fifths", angle=44, ratio=0.92, base_len=0.38,
+                           decay=0.84, branch=2),
+        "drone_web":  dict(key="natural_minor", angle=20, ratio=0.95, base_len=0.50,
+                           decay=0.88, branch=2),
+    }
+    print("   preset               nodes  span   in-key share of tail")
+    for pname, pp in PRESETS.items():
+        nn = grow(scale="key", root_semi=0, cents_per_deg=8.0, **pp)
+        out = render(tonal, nn, tail=4.0)
+        write_wav(f"07_preset_{pname}.wav", out)
+        svg(nn, os.path.join(IMG, f"07_preset_{pname}.svg"),
+            f"{pname} | {pp['key']} | {len(nn)} nodes")
+        share = in_key_share(out, KEYS[pp["key"]])
+        print(f"   {pname:20s} {len(nn):5d}  {max(n[0] for n in nn):.2f}s  {share*100:5.1f}%")
+    # controls on the same source: free ratios, no key lock
+    for cname, cover in (("free_12tet", dict(scale="12tet")),
+                         ("free_nosnap", dict(scale="off", angle=41.0))):
+        nn = grow(**dict(base, ratio=0.88, base_len=0.45, decay=0.82, **cover))
+        out = render(tonal, nn, tail=4.0)
+        write_wav(f"07_control_{cname}.wav", out)
+        print(f"   {cname:20s} {len(nn):5d}  {max(n[0] for n in nn):.2f}s  "
+              f"{in_key_share(out, KEYS['minor_pentatonic'])*100:5.1f}%  (no key lock)")
+    print(f"   {'dry source':20s} {'':5s}  {'':5s}  "
+          f"{in_key_share(np.stack([tonal, tonal], 1), KEYS['minor_pentatonic'])*100:5.1f}%  (reference)")
 
     # depth-4 versions of every variant, exported for ui/tree-travel.js
     import json
