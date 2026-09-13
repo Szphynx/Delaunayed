@@ -146,15 +146,23 @@ var DLNY_AUDIO = (function () {
     master.wet.connect(master.tone); master.tone.connect(master.out);
     master.out.connect(master.rebuildDuck); master.rebuildDuck.connect(AC.destination);
   }
+  var REBUILD_DUCK_MS = 6;
   function duckRebuild(fn) {
     var t = AC.currentTime;
     master.rebuildDuck.gain.cancelScheduledValues(t);
-    master.rebuildDuck.gain.setValueAtTime(1, t);
-    master.rebuildDuck.gain.linearRampToValueAtTime(0.0001, t + 0.004);
-    fn();
-    var t2 = AC.currentTime;
-    master.rebuildDuck.gain.setValueAtTime(0.0001, t2);
-    master.rebuildDuck.gain.linearRampToValueAtTime(1, t2 + 0.008);
+    master.rebuildDuck.gain.setValueAtTime(master.rebuildDuck.gain.value, t);
+    master.rebuildDuck.gain.linearRampToValueAtTime(0.0001, t + REBUILD_DUCK_MS / 1000);
+    // Same fix as setPitch: the ramp above is scheduled for the future, so
+    // calling fn() (which tears down and recreates every voice) in this same
+    // tick would still do it while the bus is mostly audible. setTimeout is
+    // what actually waits for the duck to land first.
+    setTimeout(function () {
+      fn();
+      var t2 = AC.currentTime;
+      master.rebuildDuck.gain.cancelScheduledValues(t2);
+      master.rebuildDuck.gain.setValueAtTime(0.0001, t2);
+      master.rebuildDuck.gain.linearRampToValueAtTime(1, t2 + REBUILD_DUCK_MS / 1000 + 0.004);
+    }, REBUILD_DUCK_MS);
   }
 
   /* Two delay lines ramped by a sawtooth, crossfaded by complementary
@@ -176,60 +184,77 @@ var DLNY_AUDIO = (function () {
   // either half of that on its own is an audible click. With ~30 voices
   // quantized to the same key, one Angle drag or a preset switch can retune
   // several of them on the same tick, so the clicks arrive as a burst, not a
-  // single pop. Fix: duck this voice's output to silence, do the swap while
-  // nothing can be heard, un-duck. DUCK_MS must clear the swap comfortably
-  // but stay under the ear's ~10-15ms click-fusion window, or the duck
-  // itself becomes an audible chirp.
-  var DUCK_MS = 4;
+  // single pop.
+  //
+  // Fix: duck this voice to silence, THEN swap, THEN un-duck. The duck has
+  // to actually finish before the swap happens, not just start -- an
+  // AudioParam ramp is scheduled for the future, it doesn't block the JS
+  // that scheduled it, so doing the swap in the same tick as scheduling the
+  // ramp (the first version of this fix) still cut a mostly-audible signal.
+  // setTimeout is what makes "after" real: DUCK_MS of wall-clock time has to
+  // actually pass. It also has to clear the swap comfortably but stay under
+  // the ear's ~10-15ms click-fusion window, or the duck itself becomes an
+  // audible chirp -- 6ms leaves room for setTimeout's own coarseness (~4ms
+  // floor in most browsers) without getting close to that ceiling.
+  var DUCK_MS = 6;
   function setPitch(v, semi) {
     if (v.semi === semi) return;              // the key snap makes this rare
+    v.semi = semi;                            // claimed now, so a same-target
+                                               // re-entry during the duck is
+                                               // still a no-op immediately
+    var mySwap = ++v.swapId;                  // a later call for this voice
+                                               // invalidates this one in flight
     var t = AC.currentTime;
     v.duck.gain.cancelScheduledValues(t);
     v.duck.gain.setValueAtTime(v.duck.gain.value, t);
     v.duck.gain.linearRampToValueAtTime(0.0001, t + DUCK_MS / 1000);
 
-    killPitch(v);
-    try { v.lp.disconnect(); } catch (e) {}
-    v.semi = semi;
-    v.lp.connect(v.tap);                      // children read the unshifted line
-    var restore = function () {
-      var t2 = AC.currentTime;
-      v.duck.gain.setValueAtTime(0.0001, t2);
-      v.duck.gain.linearRampToValueAtTime(1, t2 + DUCK_MS / 1000);
-    };
-    if (!semi) { v.lp.connect(v.duck); restore(); return; }
-    var r = Math.pow(2, semi / 12), W = PITCH_WINDOW;
-    var f = Math.abs(1 - r) / W, made = [];
-    var tri = AC.createOscillator(); tri.type = 'triangle'; tri.frequency.value = f;
-    var up = AC.createGain(); up.gain.value = 0.5;
-    var dn = AC.createGain(); dn.gain.value = -0.5;
-    tri.connect(up); tri.connect(dn); made.push(tri, up, dn);
-    [up, dn].forEach(function (win, k) {
-      var d = AC.createDelay(0.5); d.delayTime.value = W / 2;
-      var saw = AC.createOscillator(); saw.type = 'sawtooth'; saw.frequency.value = f;
-      var depth = AC.createGain(); depth.gain.value = (r > 1 ? -1 : 1) * W / 2;
-      saw.connect(depth); depth.connect(d.delayTime);
-      var g = AC.createGain(); g.gain.value = 0.5;
-      win.connect(g.gain);
-      v.lp.connect(d); d.connect(g); g.connect(v.duck);
-      saw.start(t + (k ? 0.5 / f : 0));
-      made.push(d, saw, depth, g);
-    });
-    tri.start(t);
-    v.pitch = made;
-    restore();
+    setTimeout(function () {
+      if (v.swapId !== mySwap) return;        // superseded before we got here
+      killPitch(v);
+      try { v.lp.disconnect(); } catch (e) {}
+      v.lp.connect(v.tap);                    // children read the unshifted line
+      var t3 = AC.currentTime;
+      var restore = function () {
+        v.duck.gain.cancelScheduledValues(t3);
+        v.duck.gain.setValueAtTime(0.0001, t3);
+        v.duck.gain.linearRampToValueAtTime(1, t3 + DUCK_MS / 1000);
+      };
+      if (!semi) { v.lp.connect(v.duck); restore(); return; }
+      var r = Math.pow(2, semi / 12), W = PITCH_WINDOW;
+      var f = Math.abs(1 - r) / W, made = [];
+      var tri = AC.createOscillator(); tri.type = 'triangle'; tri.frequency.value = f;
+      var up = AC.createGain(); up.gain.value = 0.5;
+      var dn = AC.createGain(); dn.gain.value = -0.5;
+      tri.connect(up); tri.connect(dn); made.push(tri, up, dn);
+      [up, dn].forEach(function (win, k) {
+        var d = AC.createDelay(0.5); d.delayTime.value = W / 2;
+        var saw = AC.createOscillator(); saw.type = 'sawtooth'; saw.frequency.value = f;
+        var depth = AC.createGain(); depth.gain.value = (r > 1 ? -1 : 1) * W / 2;
+        saw.connect(depth); depth.connect(d.delayTime);
+        var g = AC.createGain(); g.gain.value = 0.5;
+        win.connect(g.gain);
+        v.lp.connect(d); d.connect(g); g.connect(v.duck);
+        saw.start(t3 + (k ? 0.5 / f : 0));
+        made.push(d, saw, depth, g);
+      });
+      tri.start(t3);
+      v.pitch = made;
+      restore();
+    }, DUCK_MS);
   }
 
   function build(nodes) {
     voices.forEach(function (v) {
       killPitch(v);
+      v.swapId = (v.swapId || 0) + 1;          // orphan any setPitch swap still waiting on this voice
       try { v.lfo.stop(); } catch (e) {}
       [v.in, v.delay, v.lp, v.tap, v.duck, v.gain, v.pan, v.fb, v.lfo, v.lfoGain].forEach(function (n) {
         try { n.disconnect(); } catch (e) {}
       });
     });
     voices = nodes.map(function (n) {
-      var v = { n: n, semi: null, pitch: null };
+      var v = { n: n, semi: null, pitch: null, swapId: 0 };
       v.in = AC.createGain();
       v.delay = AC.createDelay(6);
       v.lp = AC.createBiquadFilter(); v.lp.type = 'lowpass';
@@ -305,10 +330,15 @@ var DLNY_AUDIO = (function () {
       v.lfoGain.gain.setTargetAtTime(
         (S.speed / 100) * Math.min(0.012, baseMs * 0.15) * (1 + n.depth * 0.4), now, 0.05);
     });
-    master.dry.gain.value = S.on ? S.dry / 100 : 1;
-    master.wet.gain.value = S.on ? S.wet / 100 : 0;
-    master.tone.frequency.value = S.tone;
-    master.out.gain.value = S.master / 100;
+    // Ramped, not set directly, for the same reason every per-voice param
+    // above is: dragging a slider fires this many times a second, and a bare
+    // .value= jump on each one is exactly what a zipper/stepping sound is.
+    // The bypass button is the sharpest case -- without this, flipping it
+    // snapped dry and wet between 0 and full in one sample.
+    master.dry.gain.setTargetAtTime(S.on ? S.dry / 100 : 1, now, 0.05);
+    master.wet.gain.setTargetAtTime(S.on ? S.wet / 100 : 0, now, 0.05);
+    master.tone.frequency.setTargetAtTime(S.tone, now, 0.08);
+    master.out.gain.setTargetAtTime(S.master / 100, now, 0.05);
     if (S.play && !srcNode) start();
     if (!S.play && srcNode) stop();
   }

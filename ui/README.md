@@ -370,7 +370,29 @@ own oscillator swap; `duckRebuild()` ducks the master bus around `build()`. Neit
 adds a real gain stage in the signal's normal path — both sit at unity except for the
 few milliseconds a swap is actually happening.
 
+**First version of this fix had a bug**: it *scheduled* the duck ramp and then did the
+swap in the same synchronous tick, before any real time had passed. An `AudioParam`
+ramp is a promise about the future, not a wait — scheduling "fade to silence over 6ms"
+doesn't pause the calling code for 6ms, so the old oscillator's hard stop still landed
+while the voice was still mostly audible. Fixed by moving the actual swap into a
+`setTimeout(fn, DUCK_MS)`, which is the part that actually waits. A voice also gets a
+`swapId` token bumped on every `setPitch()` call (and on teardown in `build()`), so a
+pitch change arriving before a previous one's deferred swap has fired supersedes it
+instead of running both — without it, dragging a slider fast enough to retarget a
+voice inside its own 6ms duck window would run two overlapping swaps on the same
+oscillators. Verified by cycling every preset three times, some faster than 6ms apart,
+with no exceptions.
+
+The four remaining places that wrote an `AudioParam.value` directly instead of
+ramping it — Master, Dry, Wet, and Tone in `sync()` — got the same `setTargetAtTime`
+treatment the per-voice params already had. Those aren't click sources in the same
+way (no graph teardown involved) but a direct `.value=` on every animation frame while
+a slider is being dragged is exactly what a "zippering"/stepping sound is, and the
+bypass button was the sharpest case: flipping it used to snap dry and wet between 0
+and full in a single sample.
+
 - **`ponytail:`** `delaunay_chassis.html` uses the same crossfade shifter and doesn't
   duck around its own pitch changes. It hasn't been reported as clicking — its pitch
   values are static per tap rather than continuously re-snapped against a moving
-  target — but the same fix would drop straight in if it ever does.
+  target — but the same fix (duck, then `setTimeout`, not duck-and-swap-immediately)
+  would drop straight in if it ever does.
