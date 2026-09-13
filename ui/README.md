@@ -327,3 +327,50 @@ found and fixed four real gaps, and left two open that are bigger than a pass:
   content. `prefers-reduced-motion` stops CSS transitions but not the `draw()` loop
   itself. Slow, organic movement (no flashing, no seizure risk) rather than a hard
   blocker, but not a clean pass either.
+
+---
+
+## An EXP tab for untrusted ideas
+
+`effects/lsystem.js` has a sixth tab, `EXP`, that the other five don't: a holding pen
+for a control that might not be worth keeping. Its two rules are what make it safe to
+experiment in:
+
+- **Every EXP control defaults to a value that is a true no-op.** Feedback and Speed
+  both start at 0%, and 0% is wired to mean *exactly* what the device did before the
+  control existed — not "very little," zero. That's what lets a preset sit in
+  `FACTORY` unmodified while EXP grows around it: nothing there can accidentally
+  change what an existing preset sounds like.
+- **The DSP for an EXP control lives in the engine, not in `ui/lsystem.js`.** Feedback
+  and Speed are both derived entirely from numbers `grow()` already produces
+  (`node.depth`, `node.gain`) plus one new top-level state value each — no change to
+  the pure grower, no new field on the node shape, nothing for `test_lsystem.js` to
+  regress on. When an idea here is good enough to promote to a real tab, that's the
+  point to decide whether it belongs in the pure module or stays engine-only.
+
+Promote a control out of EXP by moving its two lines (state default + control
+descriptor) into whichever real tab it belongs to. Retire one by deleting those same
+two lines — the engine-side wiring can stay forever at 0% cost if nothing sets it
+above zero.
+
+
+## Fixed: clicks when switching presets or retuning the tree
+
+Every voice whose pitch snaps to a new key degree tore down and rebuilt its
+crossfade-shifter oscillators instantly — stopped mid-waveform, restarted at an
+arbitrary phase. With ~30 voices sharing a key, one Angle drag or a preset switch can
+retune several at once, so the clicks arrived as a burst. A structural change
+(Children, Depth, or a preset that alters either) had the same problem one level up:
+`build()` disconnects every voice's whole node graph while it may be live.
+
+Fixed the same way in both places — duck to near-silence, make the change, un-duck,
+all within a few milliseconds, well under the ear's fusion window for a single
+"click": `setPitch()` in `prototypes/lsystem_chassis.html` ducks one voice around its
+own oscillator swap; `duckRebuild()` ducks the master bus around `build()`. Neither
+adds a real gain stage in the signal's normal path — both sit at unity except for the
+few milliseconds a swap is actually happening.
+
+- **`ponytail:`** `delaunay_chassis.html` uses the same crossfade shifter and doesn't
+  duck around its own pitch changes. It hasn't been reported as clicking — its pitch
+  values are static per tap rather than continuously re-snapped against a moving
+  target — but the same fix would drop straight in if it ever does.

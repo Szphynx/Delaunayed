@@ -177,6 +177,13 @@ spec in ways worth naming rather than quietly overwriting:
   (that augmented 2nd) and Japanese **hirajōshi**, plus a root-semitone transposition. The script
   asserts every key-locked render uses only degrees of its key, and prints which degrees the geometry
   never reached (hirajōshi never lands on its 2nd at 34°) rather than hiding it.
+- **Experimental tab:** live in the chassis prototype, an `EXP` page for ideas that haven't earned a
+  place in TREE/TIME/KEY/WIND/OUT yet — currently per-branch **Feedback** (each voice's own output
+  re-enters its own delay line, clamped to 0.85 gain and scaled by that branch's already-decayed level,
+  so a deep quiet branch can't be pushed hotter than a shallow one) and **Speed** (a slow oscillator on
+  the delay time itself — vari-speed flutter, not a pitch shift — that runs faster the deeper the branch).
+  Both default to 0%, which is a hard no-op: every factory preset sounds identical whether this tab
+  exists or not, until one of its knobs is turned up by hand.
 - **Presets on a tonal source:** [`07_tonal_dry_Am.wav`](assets/audio/07_tonal_dry_Am.wav) is a held A drone
   with a slow pentatonic arpeggio — long notes, so deep branches land while the source still sounds and the
   result is harmony, not echo. Five presets: [`cathedral`](assets/audio/07_preset_cathedral.wav),

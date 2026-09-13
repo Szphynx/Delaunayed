@@ -134,11 +134,27 @@ var DLNY_AUDIO = (function () {
     if (AC) return;
     AC = new (window.AudioContext || window.webkitAudioContext)();
     master = { in: AC.createGain(), dry: AC.createGain(), wet: AC.createGain(),
-               tone: AC.createBiquadFilter(), out: AC.createGain() };
+               tone: AC.createBiquadFilter(), out: AC.createGain(),
+               // A structural change (Children/Depth, or a preset that alters
+               // either) tears down and recreates every voice's node graph.
+               // Disconnecting a node mid-signal is a discontinuity same as
+               // setPitch's oscillator swap, just on all voices at once --
+               // ducked the same way, around rebuild() rather than one voice.
+               rebuildDuck: AC.createGain() };
     master.tone.type = 'lowpass';
     master.dry.connect(master.out);
     master.wet.connect(master.tone); master.tone.connect(master.out);
-    master.out.connect(AC.destination);
+    master.out.connect(master.rebuildDuck); master.rebuildDuck.connect(AC.destination);
+  }
+  function duckRebuild(fn) {
+    var t = AC.currentTime;
+    master.rebuildDuck.gain.cancelScheduledValues(t);
+    master.rebuildDuck.gain.setValueAtTime(1, t);
+    master.rebuildDuck.gain.linearRampToValueAtTime(0.0001, t + 0.004);
+    fn();
+    var t2 = AC.currentTime;
+    master.rebuildDuck.gain.setValueAtTime(0.0001, t2);
+    master.rebuildDuck.gain.linearRampToValueAtTime(1, t2 + 0.008);
   }
 
   /* Two delay lines ramped by a sawtooth, crossfaded by complementary
@@ -155,15 +171,35 @@ var DLNY_AUDIO = (function () {
     });
     v.pitch = null;
   }
+  // Swapping the shifter's oscillators is a hard cut: the old ones are
+  // stopped mid-waveform and the new ones start at an arbitrary phase, and
+  // either half of that on its own is an audible click. With ~30 voices
+  // quantized to the same key, one Angle drag or a preset switch can retune
+  // several of them on the same tick, so the clicks arrive as a burst, not a
+  // single pop. Fix: duck this voice's output to silence, do the swap while
+  // nothing can be heard, un-duck. DUCK_MS must clear the swap comfortably
+  // but stay under the ear's ~10-15ms click-fusion window, or the duck
+  // itself becomes an audible chirp.
+  var DUCK_MS = 4;
   function setPitch(v, semi) {
     if (v.semi === semi) return;              // the key snap makes this rare
+    var t = AC.currentTime;
+    v.duck.gain.cancelScheduledValues(t);
+    v.duck.gain.setValueAtTime(v.duck.gain.value, t);
+    v.duck.gain.linearRampToValueAtTime(0.0001, t + DUCK_MS / 1000);
+
     killPitch(v);
     try { v.lp.disconnect(); } catch (e) {}
     v.semi = semi;
     v.lp.connect(v.tap);                      // children read the unshifted line
-    if (!semi) { v.lp.connect(v.gain); return; }
+    var restore = function () {
+      var t2 = AC.currentTime;
+      v.duck.gain.setValueAtTime(0.0001, t2);
+      v.duck.gain.linearRampToValueAtTime(1, t2 + DUCK_MS / 1000);
+    };
+    if (!semi) { v.lp.connect(v.duck); restore(); return; }
     var r = Math.pow(2, semi / 12), W = PITCH_WINDOW;
-    var f = Math.abs(1 - r) / W, t = AC.currentTime, made = [];
+    var f = Math.abs(1 - r) / W, made = [];
     var tri = AC.createOscillator(); tri.type = 'triangle'; tri.frequency.value = f;
     var up = AC.createGain(); up.gain.value = 0.5;
     var dn = AC.createGain(); dn.gain.value = -0.5;
@@ -175,18 +211,20 @@ var DLNY_AUDIO = (function () {
       saw.connect(depth); depth.connect(d.delayTime);
       var g = AC.createGain(); g.gain.value = 0.5;
       win.connect(g.gain);
-      v.lp.connect(d); d.connect(g); g.connect(v.gain);
+      v.lp.connect(d); d.connect(g); g.connect(v.duck);
       saw.start(t + (k ? 0.5 / f : 0));
       made.push(d, saw, depth, g);
     });
     tri.start(t);
     v.pitch = made;
+    restore();
   }
 
   function build(nodes) {
     voices.forEach(function (v) {
       killPitch(v);
-      [v.in, v.delay, v.lp, v.tap, v.gain, v.pan].forEach(function (n) {
+      try { v.lfo.stop(); } catch (e) {}
+      [v.in, v.delay, v.lp, v.tap, v.duck, v.gain, v.pan, v.fb, v.lfo, v.lfoGain].forEach(function (n) {
         try { n.disconnect(); } catch (e) {}
       });
     });
@@ -197,10 +235,43 @@ var DLNY_AUDIO = (function () {
       v.lp = AC.createBiquadFilter(); v.lp.type = 'lowpass';
       v.lp.frequency.value = Math.max(400, 14000 * Math.pow(0.72, n.depth));
       v.tap = AC.createGain();
+      // Everything setPitch() can route into (the bypass tap or either
+      // crossfade line) lands here first, never straight into v.gain -- this
+      // is the node setPitch ducks to silence around a pitch/bypass swap.
+      v.duck = AC.createGain(); v.duck.gain.value = 1;
       v.gain = AC.createGain(); v.gain.gain.value = n.gain;
       v.pan = AC.createStereoPanner();
       v.in.connect(v.delay); v.delay.connect(v.lp);
+      v.duck.connect(v.gain);
       v.gain.connect(v.pan); v.pan.connect(master.wet);
+
+      // ---- EXPERIMENTAL: per-branch feedback and speed (EXP tab) ----
+      // Both start at 0 gain, so an un-touched device is bit-for-bit the
+      // same graph as before these existed; sync() is the only thing that
+      // ever raises them off zero.
+      //
+      // Feedback: the voice's own output re-enters its own delay line, in
+      // parallel with what its parent feeds it. Gain is clamped to 0.85
+      // regardless of the knob, and scaled by the branch's own decayed
+      // n.gain (already <=1 and falling with depth), so a deep, quiet
+      // branch can't be pushed into feeding back louder than a shallow
+      // one just because the knob is turned up. Not proven safe at every
+      // combination of Decay/Feedback — that clamp is the actual safety
+      // net, not a suggestion.
+      v.fb = AC.createGain(); v.fb.gain.value = 0;
+      v.gain.connect(v.fb); v.fb.connect(v.delay);
+
+      // Speed: a slow oscillator riding on the delay time itself — a vari-
+      // speed flutter, not a pitch shift (that's what the crossfade shifter
+      // above is for). Deeper branches wobble faster, same "depth already
+      // means more" pattern as Decay and the pitch table. Rate/depth are
+      // baked to a small, non-glitchy range (settled by ear, not measured);
+      // treat both formulas below as the first guess, not the last word.
+      v.lfo = AC.createOscillator();
+      v.lfo.frequency.value = 0.15 + n.depth * 0.35;
+      v.lfoGain = AC.createGain(); v.lfoGain.gain.value = 0;
+      v.lfo.connect(v.lfoGain); v.lfoGain.connect(v.delay.delayTime);
+      v.lfo.start();
       return v;
     });
     voices.forEach(function (v, i) {
@@ -215,7 +286,7 @@ var DLNY_AUDIO = (function () {
   function sync() {
     if (!AC || !S.nodes.length) return;
     var sig = S.branch + '/' + S.maxDepth + '/' + S.nodes.length;
-    if (sig !== shape) { shape = sig; build(S.nodes); }
+    if (sig !== shape) { shape = sig; duckRebuild(function () { build(S.nodes); }); }
     var now = AC.currentTime, w = S.spread / 100;
     S.nodes.forEach(function (n, i) {
       var v = voices[i];
@@ -225,6 +296,14 @@ var DLNY_AUDIO = (function () {
       v.pan.pan.setTargetAtTime(n.pan * w, now, 0.08);
       v.gain.gain.setTargetAtTime(n.gain, now, 0.05);
       setPitch(v, n.semi);
+      // EXPERIMENTAL, see build(): 0.85 hard ceiling on feedback regardless
+      // of the knob; speed's modulation depth grows gently with the branch's
+      // own base delay so a short branch near the root can't be flattened
+      // to zero by too big a wobble.
+      v.fb.gain.setTargetAtTime(Math.min(0.85, (S.feedback / 100) * n.gain), now, 0.05);
+      var baseMs = n.t - (n.parent >= 0 ? S.nodes[n.parent].t : 0);
+      v.lfoGain.gain.setTargetAtTime(
+        (S.speed / 100) * Math.min(0.012, baseMs * 0.15) * (1 + n.depth * 0.4), now, 0.05);
     });
     master.dry.gain.value = S.on ? S.dry / 100 : 1;
     master.wet.gain.value = S.on ? S.wet / 100 : 0;

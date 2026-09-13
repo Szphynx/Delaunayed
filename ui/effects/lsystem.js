@@ -52,6 +52,9 @@ var DLNY = window.DLNY || (window.DLNY = {});
     keyIdx: KEYS.indexOf('minor_pentatonic'), rootSemi: 0, centsPerDeg: 8,
     windAmount: 0.35, windRate: 0.10, gust: 0.5,
     master: 80, dry: 70, wet: 85,
+    // experimental — both default to 0, which is a hard no-op: nothing about
+    // an existing preset changes until one of these is turned up by hand.
+    feedback: 0, speed: 0,
     // live
     t: 0, w: 0, hold: null, nodes: [], dirty: true
   };
@@ -76,7 +79,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
     name: 'Tree',
     meta: 'AUDIO FX · LSY-01',
     state: S,
-    tabs: ['TREE', 'TIME', 'KEY', 'WIND', 'OUT'],
+    tabs: ['TREE', 'TIME', 'KEY', 'WIND', 'OUT', 'EXP'],
 
     transport: function (s) {
       return [
@@ -151,6 +154,19 @@ var DLNY = window.DLNY || (window.DLNY = {});
             { label: 'Rate', obj: s, key: 'windRate', min: 0.02, max: 1.2, step: 0.01,
               fmt: function (v) { return (+v).toFixed(2) + 'Hz'; } },
             { label: 'Gust', obj: s, key: 'gust', min: 0, max: 1, step: 0.01, fmt: function (v) { return Math.round(v * 100) + '%'; } }
+          ];
+        }
+      },
+      EXP: {
+        // Untested ideas live here, not in TREE/TIME/WIND, so trying one can
+        // never quietly change what a saved preset sounds like — every
+        // control on this page is 0 at every factory preset and stays 0
+        // until it's turned up by hand.
+        context: function () { return 'unproven — 0% is always a no-op'; },
+        controls: function (s) {
+          return [
+            { label: 'Feedback', obj: s, key: 'feedback', min: 0, max: 90, fmt: F.pct },
+            { label: 'Speed', obj: s, key: 'speed', min: 0, max: 100, fmt: F.pct }
           ];
         }
       },
