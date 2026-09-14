@@ -76,6 +76,11 @@ var DLNY = window.DLNY || (window.DLNY = {});
   // all. Plain {x,y,fx,fy,m} numbers, so TreeTravel never needs to know
   // LSystem exists (see its own comment on this).
   var FLOW_RADIUS = 55;
+  // The cluster's own outer edge (a corner sample is sqrt(2) radii out) is
+  // where it fades to nothing, tapering over the outer 20% of that edge
+  // distance -- full strength near the gust, gone by the boundary, instead
+  // of a hard-edged box of arrows around it.
+  var FLOW_EDGE = Math.SQRT2 * FLOW_RADIUS;
   function flowGrid(gusts, t) {
     var out = [];
     (gusts || []).forEach(function (g) {
@@ -84,7 +89,10 @@ var DLNY = window.DLNY || (window.DLNY = {});
           var x = g.x + dx * FLOW_RADIUS, y = g.y + dy * FLOW_RADIUS;
           var fl = LSystem.flow(x, y, t), m = Math.hypot(fl.fx, fl.fy);
           if (m < 0.1) continue;
-          out.push({ x: x, y: y, fx: fl.fx, fy: fl.fy, m: m });
+          var frac = Math.hypot(dx, dy) * FLOW_RADIUS / FLOW_EDGE;
+          var fade = frac <= 0.8 ? 1 : Math.max(0, 1 - (frac - 0.8) / 0.2);
+          if (fade <= 0) continue;
+          out.push({ x: x, y: y, fx: fl.fx, fy: fl.fy, m: m * fade });
         }
       }
     });
