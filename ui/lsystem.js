@@ -92,7 +92,13 @@
       // parent's bend, so a gust swings whole branches rather than twitching
       // single nodes
       var flex = Math.pow((depth + 1) / (p.maxDepth + 1), 1.3);
-      var bend = w * p.windAmount * flex * p.angle;
+      var bendRaw = w * p.windAmount * flex * p.angle;
+      // Soft-limited: a wide Angle plus a hot windAmount used to whip a tip
+      // past vertical (bendRaw could hit 190°+), which read as a glitch, not
+      // wind. tanh keeps it responsive for normal settings (it's ~linear
+      // under ~50°) and dampens it into a ceiling instead of letting it blow
+      // out.
+      var bend = 70 * Math.tanh(bendRaw / 70);
       heading += bend;
       // a bent branch is a stretched one, and its delay time goes with it —
       // that drag is the chirp you hear while the wind moves
@@ -128,8 +134,15 @@
     var p = defaults(params);
     var base = 0.6 * Math.sin(2 * Math.PI * p.windRate * t)
              + 0.4 * Math.sin(2 * Math.PI * p.windRate * 1.618 * t + 1.1);
+    // Gust direction used to be sign(base||1) -- it flipped instantly at
+    // every zero-crossing of base, a snap rather than a gust. A third,
+    // incommensurate oscillator steers it smoothly instead, and since it
+    // isn't locked to base's phase, gusts don't always shove the same way
+    // the sway already leans -- more varied movement from the same knobs,
+    // not just a louder version of the same motion.
+    var dir = Math.sin(2 * Math.PI * p.windRate * 0.618 * t + 2.4);
     var g = Math.pow(Math.max(0, Math.sin(2 * Math.PI * p.windRate * 0.37 * t)), 3);
-    return base * (1 - p.gust) + g * p.gust * 1.6 * Math.sign(base || 1);
+    return base * (1 - p.gust) + g * p.gust * 1.6 * dir;
   }
 
   var LSystem = { KEYS: KEYS, grow: grow, wind: wind,
