@@ -129,7 +129,7 @@
 var DLNY_AUDIO = (function () {
   var S = DLNY.lsystem.state;
   var AC = null, master = null, voices = [], buffer = null, srcNode = null, shape = '';
-  var levelBuf = new Uint8Array(32);
+  var levelBuf = new Uint8Array(32), envState = [];
 
   function ensureAC() {
     if (AC) return;
@@ -344,8 +344,17 @@ var DLNY_AUDIO = (function () {
     // the (audio-agnostic) draw spec to read. Off is free -- the analysers
     // keep running either way (see build()), this loop is the only cost, and
     // it's skipped entirely when nobody's looking at it.
+    //
+    // Envelope mode runs the same peak through a follower instead of handing
+    // it over raw: instant attack (a transient snaps the dot up the same
+    // frame it happens) and a per-frame release of 0.88 (~150ms to fall back
+    // to silence at 60fps -- eyeballed, not measured) so a hit's dot holds
+    // near its peak and eases off, rather than the raw meter's on/off jitter.
     if (S.audioReact) {
-      if (S.levels.length !== voices.length) S.levels = new Array(voices.length).fill(0);
+      if (S.levels.length !== voices.length) {
+        S.levels = new Array(voices.length).fill(0);
+        envState = new Array(voices.length).fill(0);
+      }
       voices.forEach(function (v, i) {
         v.analyser.getByteTimeDomainData(levelBuf);
         var peak = 0;
@@ -353,7 +362,13 @@ var DLNY_AUDIO = (function () {
           var d = Math.abs(levelBuf[j] - 128);
           if (d > peak) peak = d;
         }
-        S.levels[i] = peak / 128;
+        peak /= 128;
+        if (S.audioReact === 2) {
+          envState[i] = peak > envState[i] ? peak : envState[i] * 0.88;
+          S.levels[i] = envState[i];
+        } else {
+          S.levels[i] = peak;
+        }
       });
     }
     // Ramped, not set directly, for the same reason every per-voice param

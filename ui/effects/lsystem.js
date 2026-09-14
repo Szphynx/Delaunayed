@@ -176,11 +176,14 @@ var DLNY = window.DLNY || (window.DLNY = {});
             { label: 'Family Hue', obj: s, key: 'hueRoot', min: 0, max: 1, step: 1,
               fmt: function (v) { return v ? 'On' : 'Off'; } },
             // Off (default) costs nothing extra: the chassis never reads the
-            // per-voice analysers it already keeps running. On, draw() reads
-            // s.levels -- written every frame by the audio engine, not by
-            // this spec, which stays audio-agnostic.
-            { label: 'Audio React', obj: s, key: 'audioReact', min: 0, max: 1, step: 1,
-              fmt: function (v) { return v ? 'On' : 'Off'; } }
+            // per-voice analysers it already keeps running. Level is the raw
+            // per-frame peak (jittery, exact). Envelope runs that peak through
+            // a fast-attack/slow-release follower instead -- the dots snap up
+            // on a transient and decay after it, a peak-hold meter rather
+            // than a twitchy one. Either way draw() reads s.levels, written
+            // every frame by the audio engine; this spec stays audio-agnostic.
+            { label: 'Audio React', obj: s, key: 'audioReact', min: 0, max: 2, step: 1,
+              fmt: function (v) { return ['Off', 'Level', 'Envelope'][v]; } }
           ];
         }
       },
