@@ -54,7 +54,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
     master: 80, dry: 70, wet: 85,
     // experimental — both default to 0, which is a hard no-op: nothing about
     // an existing preset changes until one of these is turned up by hand.
-    feedback: 0, speed: 0, hueRoot: 0, audioReact: 0, levels: [],
+    feedback: 0, speed: 0, hueRoot: 0, audioReact: 0, levels: [], flowField: 0,
     // live
     t: 0, w: 0, hold: null, nodes: [], dirty: true
   };
@@ -63,7 +63,29 @@ var DLNY = window.DLNY || (window.DLNY = {});
     return { branch: s.branch, angle: s.angle, ratio: s.ratio, decay: s.decay,
              baseLen: s.baseLen, maxDepth: s.maxDepth, centsPerDeg: s.centsPerDeg,
              key: KEYS[s.keyIdx], rootSemi: s.rootSemi,
-             windAmount: s.windAmount, windRate: s.windRate, gust: s.gust };
+             windAmount: s.windAmount, windRate: s.windRate, gust: s.gust,
+             flowField: s.flowField };
+  }
+
+  // Flow Field (EXP): a small grid across the tree's own extent, each point
+  // sampling LSystem.flow() -- plain {x,y,fx,fy} numbers, so TreeTravel
+  // never needs to know LSystem exists (see its own comment on this).
+  function flowGrid(nodes, t) {
+    if (!nodes.length) return [];
+    var xs = nodes.map(function (n) { return n.x; }).concat([0]);
+    var ys = nodes.map(function (n) { return n.y; }).concat([0]);
+    var minx = Math.min.apply(null, xs), maxx = Math.max.apply(null, xs);
+    var miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys);
+    var cols = 4, rows = 3, out = [];
+    for (var r = 0; r < rows; r++) {
+      for (var c = 0; c < cols; c++) {
+        var x = minx + (maxx - minx) * (c + 0.5) / cols;
+        var y = miny + (maxy - miny) * (r + 0.5) / rows;
+        var fl = LSystem.flow(x, y, t);
+        out.push({ x: x, y: y, fx: fl.fx, fy: fl.fy });
+      }
+    }
+    return out;
   }
 
   function applyPreset(s) {
@@ -79,7 +101,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
     name: 'Tree',
     meta: 'AUDIO FX · LSY-01',
     state: S,
-    tabs: ['TREE', 'TIME', 'KEY', 'WIND', 'OUT', 'EXP'],
+    tabs: ['TREE', 'TIME', 'KEY', 'WIND', 'OUT', 'EXP', 'FLOW'],
 
     transport: function (s) {
       return [
@@ -187,6 +209,21 @@ var DLNY = window.DLNY || (window.DLNY = {});
           ];
         }
       },
+      FLOW: {
+        // Same no-op convention as EXP, its own tab only because EXP is
+        // already at the rack's 4-control limit. wind() is one number
+        // shared by the whole tree at any instant (bent per-depth, never
+        // per-location); this is what actually varies wind BY WHERE a
+        // branch is, and it's the one EXP feature that draws something of
+        // its own (the arrow field), so it earns the extra tab.
+        context: function () { return 'unproven — Off is always a no-op'; },
+        controls: function (s) {
+          return [
+            { label: 'Flow Field', obj: s, key: 'flowField', min: 0, max: 1, step: 1,
+              fmt: function (v) { return v ? 'On' : 'Off'; } }
+          ];
+        }
+      },
       OUT: {
         // Master leads: it is the loudest control on the device and the one a
         // player reaches for without thinking, so it goes first in the page a
@@ -225,11 +262,16 @@ var DLNY = window.DLNY || (window.DLNY = {});
       // 60 times a second for no reason while the wind sways on its own.
       var sig = p.branch + '|' + p.angle + '|' + p.ratio + '|' + p.decay + '|' +
         p.baseLen + '|' + p.maxDepth + '|' + p.centsPerDeg + '|' + p.key + '|' +
-        p.rootSemi + '|' + p.windAmount + '|' + p.windRate + '|' + p.gust;
-      if (!s.dirty && sig === s.paramSig && Math.abs(w - s.w) < 0.002) { s.w = w; return true; }
+        p.rootSemi + '|' + p.windAmount + '|' + p.windRate + '|' + p.gust + '|' + p.flowField;
+      // Flow Field ties bend to wallT directly (see LSystem.flow), not just
+      // to how much w has drifted, so the wind-delta shortcut below would
+      // freeze it between w's own updates. Skip the shortcut while it's on.
+      if (!p.flowField && !s.dirty && sig === s.paramSig && Math.abs(w - s.w) < 0.002) {
+        s.w = w; return true;
+      }
       s.paramSig = sig;
       s.w = w;
-      s.nodes = LSystem.grow(p, w);
+      s.nodes = LSystem.grow(p, w, seconds);
       s.dirty = false;
       return true;
     },
@@ -238,7 +280,8 @@ var DLNY = window.DLNY || (window.DLNY = {});
       if (!s.nodes.length) s.nodes = LSystem.grow(params(s), 0);
       TreeTravel.paint(ctx, W, H, s.nodes, (s.t * 0.3) % (TreeTravel.span(s.nodes) + 1.2),
                        { labels: W > 320, familyHue: !!s.hueRoot, rootSemi: s.rootSemi,
-                         levels: s.audioReact ? s.levels : null });
+                         levels: s.audioReact ? s.levels : null,
+                         flowArrows: s.flowField ? flowGrid(s.nodes, s.t) : null });
     },
 
     // Master sits in every readout, not just the OUT page — the one thing on

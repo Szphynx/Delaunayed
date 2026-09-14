@@ -69,7 +69,23 @@
       floor: p.floor == null ? 1e-3 : p.floor,
       windAmount: p.windAmount == null ? 0 : p.windAmount,
       windRate: p.windRate == null ? 0.12 : p.windRate,
-      gust: p.gust == null ? 0.5 : p.gust
+      gust: p.gust == null ? 0.5 : p.gust,
+      flowField: p.flowField == null ? 0 : p.flowField
+    };
+  }
+
+  /* ---- flow ----------------------------------------------------------------
+     A vector field over the growth plane: two sums of a few incommensurate
+     sines/cosines per axis, one set in x, one in y, so it swirls at a large
+     scale instead of just rippling on a grid. No noise library -- same
+     "few sines beat a dependency" call as wind() above. Roughly -1..1 per
+     axis. Pure position+time in, a vector out; grow() and the visualiser
+     both call this, so neither can draw a field the other doesn't agree on. */
+  function flow(x, y, t) {
+    t = t || 0;
+    return {
+      fx: 0.6 * Math.sin(y * 0.006 + t * 0.15) + 0.4 * Math.cos(x * 0.004 - t * 0.09 + 1.3),
+      fy: 0.6 * Math.cos(x * 0.005 - t * 0.11 + 0.7) + 0.4 * Math.sin(y * 0.007 + t * 0.08)
     };
   }
 
@@ -82,7 +98,7 @@
      heading before anything is derived from it, so one call gives the bent
      geometry, the bent pitches and the stretched delay times together — the
      drawing and the audio can never disagree about where the tree is. */
-  function grow(params, w) {
+  function grow(params, w, wallT) {
     var p = defaults(params), degrees = KEYS[p.key] || KEYS.minor_pentatonic;
     var nodes = [];
     w = w || 0;
@@ -93,6 +109,17 @@
       // single nodes
       var flex = Math.pow((depth + 1) / (p.maxDepth + 1), 1.3);
       var bendRaw = w * p.windAmount * flex * p.angle;
+      // Flow Field (EXP): weight the same bend by how strong the field is
+      // AT THIS BRANCH -- sampled at (x,y), the position entering this
+      // segment (already known, so still causal). A branch sitting where
+      // the field is calm barely moves even in a big gust; one sitting
+      // where it's strong swings harder, instead of every branch at a given
+      // depth moving in perfect lockstep. 0.4 floor keeps it a weighting,
+      // not an on/off switch.
+      if (p.flowField) {
+        var fl = flow(x, y, wallT);
+        bendRaw *= 0.4 + 0.6 * Math.min(1, Math.hypot(fl.fx, fl.fy));
+      }
       // Soft-limited: a wide Angle plus a hot windAmount used to whip a tip
       // past vertical (bendRaw could hit 190°+), which read as a glitch, not
       // wind. tanh keeps it responsive for normal settings (it's ~linear
@@ -145,7 +172,7 @@
     return base * (1 - p.gust) + g * p.gust * 1.6 * dir;
   }
 
-  var LSystem = { KEYS: KEYS, grow: grow, wind: wind,
+  var LSystem = { KEYS: KEYS, grow: grow, wind: wind, flow: flow,
                   snapKey: snapKey, noteName: noteName, defaults: defaults };
   if (typeof module === 'object' && module.exports) module.exports = LSystem;
   root.LSystem = LSystem;

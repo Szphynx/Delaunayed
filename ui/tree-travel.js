@@ -199,6 +199,34 @@
     ctx.fillStyle = opts.bg || '#08192a';
     ctx.fillRect(0, 0, W, H);
 
+    // Flow Field (EXP): opts.flowArrows is a plain {x,y,fx,fy} array in the
+    // grower's own coordinates -- the chassis samples LSystem.flow() itself
+    // and hands over numbers, same contract as levels above, so this module
+    // still never calls into LSystem. Drawn first, low alpha and additive
+    // blending, so the arrows read as a backdrop the tree sits on top of,
+    // not competing lines.
+    if (opts.flowArrows && opts.flowArrows.length) {
+      ctx.save();
+      ctx.globalAlpha = 0.32;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = '#4fb0ff';
+      ctx.lineWidth = 1;
+      var ARROW_LEN = 44;
+      opts.flowArrows.forEach(function (a) {
+        var x1 = TX(a.x), y1 = TY(a.y);
+        var x2 = TX(a.x + a.fx * ARROW_LEN), y2 = TY(a.y + a.fy * ARROW_LEN);
+        var ang = Math.atan2(y2 - y1, x2 - x1), head = 5;
+        ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - head * Math.cos(ang - 0.5), y2 - head * Math.sin(ang - 0.5));
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - head * Math.cos(ang + 0.5), y2 - head * Math.sin(ang + 0.5));
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
     // EXP's Audio React: opts.levels is a plain array of 0..1 numbers, one
     // per node.i, the chassis measured off that voice's own output this
     // frame (an AnalyserNode -- real, not modelled). Everything before this
