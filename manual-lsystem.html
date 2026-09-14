@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tree - Manual</title>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<div class="wrap" id="masthead">
+  <h1>Tree<span>.</span></h1>
+  <div class="tagline">A delay tree grown from six numbers, not a tap list — every branch reads
+    its parent's output, so times, pitches and levels all compound down the tree instead of
+    sitting on a shelf of independent taps.</div>
+  <div class="index">
+    <a href="manual.html">&larr;&nbsp;Manuals</a>
+    <a href="prototypes/lsystem_chassis.html" target="_blank" rel="noopener">Open&nbsp;&#8599;</a>
+    <a href="#idea">The idea</a>
+    <a href="#start">Start here</a>
+    <a href="#signal">Why is there a gap?</a>
+    <a href="#controls">Controls</a>
+    <a href="#sounds">Sounds to try</a>
+  </div>
+</div>
+
+<section id="idea">
+  <h2>The idea</h2>
+  <p class="lede">A normal multitap delay is a list: six taps, each with its own fixed time,
+    level and pan, all reading the same input. This one is a tree: each tap (a <b>branch</b>)
+    reads the <em>previous</em> tap's output, not the input, so a branch's delay time is really
+    its parent's time plus its own — times compound down the tree the way branches compound on
+    a real plant.</p>
+  <p>The six numbers on the TREE and TIME pages — <b>Children</b>, <b>Depth</b>, <b>Angle</b>,
+    <b>Trunk</b>, <b>Ratio</b>, <b>Decay</b> — are the whole tree. There is no per-tap editing:
+    change one number and every branch that number touches moves together, which is what a
+    normal delay's tap list can't do.</p>
+  <p>The turn angle at each branch is also its pitch, snapped to a scale (KEY page), and a wind
+    field (WIND page) can bend the whole tree, which retunes it in real time. That's the other
+    half of the instrument: <b>grow a shape, then let it sway.</b></p>
+</section>
+
+<section id="start">
+  <h2>Start here</h2>
+  <ol class="steps">
+    <li><b>Press &#9654;.</b> Loads and plays a built-in source (a droning A-minor chord by
+      default) through the tree. Pick a different one, or drop your own file in, from the
+      source strip under the device.</li>
+    <li><b>Or play it with notes.</b> The on-screen keyboard (and your computer's
+      <b>a w s e d f t g y h u j k</b> row) feeds the tree a Rhodes-style note instead of a
+      sample — the fastest way to hear exactly what one hit does.</li>
+    <li><b>Try a Preset first.</b> Each one is a complete set of all six tree numbers plus a key
+      and a wind setting. Learning the parameters by ear against a preset you already like beats
+      guessing from a blank tree.</li>
+    <li><b>Set OUT last.</b> Dry always passes underneath, so Wet only decides how much tree
+      sits on top of it, and Master is the final level over both.</li>
+  </ol>
+</section>
+
+<section id="signal">
+  <h2>Why is there a gap before the effect?</h2>
+  <p class="lede">If you hear the dry hit, then a beat of silence, then the tree — that gap is
+    the <b>Trunk</b> knob, and it's supposed to be there. Nothing else in the signal path adds
+    delay.</p>
+  <p>The dry signal goes straight from the source to the output with no processing in between
+    — zero added latency. The wet signal goes into the <b>root</b> branch first, and that
+    branch's delay time is exactly <b>Trunk</b>. Not close to Trunk, not Trunk scaled by
+    something — the very first thing you hear from the tree arrives exactly Trunk milliseconds
+    after the dry hit, every time, because that's what Trunk <em>is</em>: the tree's pre-delay.</p>
+  <p><b>Decay does not touch this.</b> Decay sets how much <em>quieter</em> each generation gets
+    (branch gain = Decay<sup>depth</sup>) — it's a level control, the same job Feedback/Regen
+    does on a normal delay, and it has no say over when anything starts. Turning Decay down
+    makes the tail die out faster and quieter; it will never close the gap between a hit and the
+    first repeat, because timing and level are two separate knobs here on purpose.</p>
+  <p><b>Ratio doesn't touch it either</b> — Ratio scales every generation <em>after</em> the
+    root by Ratio<sup>depth</sup>, but the root itself is depth 0, and anything to the power of 0
+    is 1. The root's time is Trunk no matter what Ratio is set to.</p>
+  <p>So the only knob that moves that gap is Trunk itself, and it now runs down to 2&nbsp;ms
+    (it used to floor out at 50&nbsp;ms). That's about as tight as it can get while still being
+    a tree of distinct branches rather than one filtered copy of the input — a real delay pedal
+    has the same wall for the same reason: below a few milliseconds, "delay" and "comb filter"
+    are the same circuit.</p>
+  <p class="note">Quick test: solo a drum hit, turn <b>Wet</b> to 100% and <b>Dry</b> to 0% on
+    the OUT page, then pull <b>Trunk</b> down while it loops. You'll hear the repeat visibly
+    catch up to the hit as Trunk falls — proof that Trunk is the only thing setting that
+    distance, not Decay.</p>
+</section>
+
+<section id="controls">
+  <h2>Controls, and what they'd be called on a normal delay</h2>
+  <p>Every page is at most four knobs. None of them are per-branch — turning one moves the
+    whole tree, which is the trade for not having to program thirty individual taps by hand.</p>
+
+  <h3>TREE — the shape</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Preset</td><td class="r">Factory / User</td>
+          <td>Loading a patch. Factory Presets are built in; hit <b>SAVE</b> on the transport to
+            snapshot the current tree into User Presets, saved to this browser.</td></tr>
+        <tr><td class="k">Children</td><td class="r">1&ndash;3</td>
+          <td>No direct equivalent — closest is a multitap's tap count, except multiplicative.
+            Every branch gets this many children at the next generation, so raising it explodes
+            the total branch count fast: 2 children &times; Depth 4 is 31 branches, 3 children
+            &times; the same Depth is 121.</td></tr>
+        <tr><td class="k">Depth</td><td class="r">1&ndash;5</td>
+          <td>Like a tape delay's number-of-repeats, except the repeats fan out instead of
+            running in a line. Sets both how long the tail can possibly get (with Trunk/Ratio)
+            and, with Children, the total branch count.</td></tr>
+        <tr><td class="k">Angle</td><td class="r">6&ndash;60&deg;</td>
+          <td>Not a delay control at all — it's a detune amount, like a chorus or harmonizer's
+            spread. Each turn is also a pitch interval (see Spread, KEY page), so a wide angle
+            means siblings land further apart in pitch, not just in the drawing.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>TIME — pre-delay, spacing, decay, tone</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Trunk</td><td class="r">2&ndash;700&nbsp;ms</td>
+          <td>The <b>Time / Pre-delay</b> knob — the root branch's delay time, and the floor on
+            how soon anything wet can arrive. See "Why is there a gap?" above.</td></tr>
+        <tr><td class="k">Ratio</td><td class="r">0.4&ndash;0.98</td>
+          <td>How each generation's spacing shrinks from the last (time<sub>depth</sub> = Trunk
+            &times; Ratio<sup>depth</sup>, summed down the branch). Close to 1 spreads
+            generations out almost evenly, like a long multitap; low values bunch them up near
+            the front, like a short slapback with a fast flutter behind it.</td></tr>
+        <tr><td class="k">Decay</td><td class="r">0.4&ndash;0.92</td>
+          <td>The <b>Feedback / Regen</b> knob, in effect — how much quieter each generation gets
+            (gain<sub>depth</sub> = Decay<sup>depth</sup>). Unlike real feedback it can't run
+            away: the tree is finite, so this only ever shapes how fast a fixed structure fades,
+            never how long it can ring. For actual self-feeding regeneration, see EXP.</td></tr>
+        <tr><td class="k">Tone</td><td class="r">400&nbsp;Hz&ndash;16&nbsp;kHz</td>
+          <td>The delay's <b>Tone / Damping</b> knob — a lowpass over the wet signal only, after
+            the tree, on the master bus. Rolling it back pushes the tree behind the dry source.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>KEY — what pitch a turn means</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Scale</td><td class="r">11 scales</td>
+          <td>Like setting a harmonizer or pitch-quantizer's scale. Every branch's pitch snaps to
+            a degree of this scale — nothing in the tree can land off-key.</td></tr>
+        <tr><td class="k">Root</td><td class="r">&minus;12&hellip;+12&nbsp;st</td>
+          <td>The scale's <b>Key</b> control — transposes every branch's pitch together.</td></tr>
+        <tr><td class="k">Spread</td><td class="r">2&ndash;24&nbsp;&cent;/&deg;</td>
+          <td>How many cents one degree of Angle is worth before snapping to the scale. Works
+            with Angle (TREE page): a wide Angle and a wide Spread push siblings toward opposite
+            ends of the scale; both narrow and every branch stays close to the root's pitch.</td></tr>
+        <tr><td class="k">Width</td><td class="r">0&ndash;100%</td>
+          <td>The delay's <b>Stereo Width</b> knob — scales how far each branch's pan follows the
+            tree's actual left/right shape. At 0 every branch sits centre; at 100 the pan matches
+            the drawing exactly.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>WIND — modulation</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Amount</td><td class="r">0&ndash;2</td>
+          <td>A modulation <b>Depth</b> knob, like a chorus — how far the wind bends the tree.
+            Since a branch's heading is also its pitch and its delay time stretches with the
+            bend, this modulates pitch and time together, not one or the other.</td></tr>
+        <tr><td class="k">Rate</td><td class="r">0.02&ndash;1.2&nbsp;Hz</td>
+          <td>The modulation <b>Rate</b> knob, same job as a chorus or tremolo's speed control.</td></tr>
+        <tr><td class="k">Gust</td><td class="r">0&ndash;100%</td>
+          <td>No direct equivalent — blends a smooth LFO sway toward sudden swelling bursts, more
+            like an envelope-triggered depth than a fixed waveform shape.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="note"><b>Drag the tree on the canvas</b> and your finger becomes the wind directly,
+    like an expression pedal patched into a modulated delay's rate/depth input — Amount/Rate/Gust
+    take back over the instant you let go.</p>
+
+  <h3>OUT — the mix</h3>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Master</td><td class="r">0&ndash;100%</td>
+          <td>Output level over the whole mix, after Dry and Wet are combined — the pedal's
+            final <b>Level</b> knob.</td></tr>
+        <tr><td class="k">Dry</td><td class="r">0&ndash;100%</td>
+          <td>The unprocessed source. Never removed by Wet — this is a balance, not a
+            crossfade.</td></tr>
+        <tr><td class="k">Wet</td><td class="r">0&ndash;100%</td>
+          <td>How much tree sits over the dry signal — the delay's <b>Mix</b> knob.</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>EXP — untested, and off by default</h3>
+  <p>New ideas land here first. Both controls are <b>0% at every factory preset</b>, and 0% is a
+    true no-op — the tree behaves exactly as if this page didn't exist until you turn one up.</p>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th>Control</th><th>Range</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td class="k">Feedback</td><td class="r">0&ndash;90%</td>
+          <td>An actual <b>Feedback / Regen</b> knob, unlike Decay — a branch's own output
+            re-enters its own delay line, so it can genuinely build and sustain rather than only
+            shaping a fixed fade. Clamped to 0.85 gain per branch and scaled by that branch's own
+            Decay-shaped level, so a deep, quiet branch can't be pushed hotter than a shallow,
+            loud one — but it isn't proven safe at every combination with Decay, so raise it
+            slowly and listen.</td></tr>
+        <tr><td class="k">Speed</td><td class="r">0&ndash;100%</td>
+          <td>A <b>Wow/Flutter</b> knob — a slow wobble directly on each branch's delay time
+            (not a separate pitch-shift), running faster the deeper the branch. Different from
+            WIND's Amount: this is a fast, continuous per-branch flutter; Wind is a slow sway of
+            the whole tree's shape.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="sounds">
+  <h2>Sounds to try</h2>
+  <div class="recipe">
+    <b>Tight slapback, not a wash</b>
+    <p>Start from <em>Still Air</em> (no wind to complicate things). Pull <b>Trunk</b> down to
+      15&ndash;25&nbsp;ms and <b>Decay</b> down toward 0.5. The repeat sits right on top of the
+      hit instead of trailing behind it &mdash; useful for checking Trunk's new low end against
+      the drum-hit case directly.</p>
+  </div>
+  <div class="recipe">
+    <b>A chord out of one note</b>
+    <p>Play a single Rhodes note into <em>Cathedral</em> or <em>Drone Web</em> with Depth at 4-5
+      and Angle around 30&deg;. Every branch lands on a different scale degree, so one note
+      arrives back as a spread chord.</p>
+  </div>
+  <div class="recipe">
+    <b>Storm on a chord</b>
+    <p>Latch a triad on the keyboard, load the <em>Storm</em> preset, and just listen &mdash;
+      Amount and Gust are already high, so the chord's pitches visibly (and audibly) swim as the
+      wind bends the tree.</p>
+  </div>
+  <div class="recipe">
+    <b>Careful self-feedback</b>
+    <p>Any preset, EXP page: bring <b>Feedback</b> up in small steps while Decay stays under
+      0.7. It's the one control here that hasn't earned full trust yet &mdash; that's exactly
+      why it's on its own page.</p>
+  </div>
+</section>
+
+<footer>
+  <span>Tree - a branching delay grown from six numbers.</span>
+  <span><a href="manual.html">Manuals</a> &middot; <a href="index.html">Index</a></span>
+</footer>
+
+</body></html>

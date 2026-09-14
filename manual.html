@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Delaunay - Manuals</title>
+<title>Manuals</title>
 <link rel="stylesheet" href="manual.css">
 <style>
  .devs{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px;margin:0 0 16px}
@@ -23,12 +23,13 @@
 
 <div class="wrap" id="masthead">
   <h1>Manuals<span>.</span></h1>
-  <div class="tagline">Two instruments, built on the same idea: let some structure decide what
+  <div class="tagline">Three instruments, built on the same idea: let some structure decide what
     the delay does, and perform the structure instead of the knobs.</div>
   <div class="index">
     <a href="index.html">&larr;&nbsp;Index</a>
     <a href="manual-delaunay.html">Delaunay</a>
     <a href="manual-collapse.html">Collapse</a>
+    <a href="manual-lsystem.html">Tree</a>
     <a href="#start">Getting started</a>
   </div>
 </div>
@@ -61,13 +62,26 @@
       </div>
     </div>
 
+    <div class="dev">
+      <div class="t"><a href="manual-lsystem.html">Tree</a></div>
+      <div class="s">Branching delay tree &middot; wind &middot; key lock</div>
+      <p>An L-system grown from six numbers instead of a tap list &mdash; every branch reads its
+        parent's output, so times, pitches and levels compound down the tree. A wind field bends
+        the shape and retunes it live, and every pitch snaps to a scale, so it never plays a
+        wrong note no matter how hard it sways.</p>
+      <div class="go">
+        <a class="p" href="manual-lsystem.html">Read the manual</a>
+        <a href="prototypes/lsystem_chassis.html" target="_blank" rel="noopener">Open &#8599;</a>
+      </div>
+    </div>
+
   </div>
 </section>
 
 <section id="start">
   <h2>Getting started</h2>
-  <p class="lede">Both instruments process audio you give them. Neither makes sound on its own,
-    so the first job is always feeding one.</p>
+  <p class="lede">All three instruments can process audio you give them. Neither the source strip
+    nor the on-screen keyboard makes sound on its own, so the first job is always feeding one.</p>
   <ol class="steps">
     <li><b>Tap the page once.</b> Browsers only allow audio to start inside a real interaction.
       The first tap wakes the engine and loads a short built-in loop so there is something to
@@ -77,15 +91,18 @@
       <b>Loop</b> repeats a file rather than playing it once through.</li>
     <li><b>Press &#9654;</b> and set <b>Dry/Wet</b>. The dry signal always passes underneath, so
       this is a balance between source and effect rather than a fade to silence.</li>
-    <li><b>Use the canvas.</b> On both instruments the canvas is where the playing happens; the
-      pages underneath are for setting up what the canvas will do.</li>
+    <li><b>Use the canvas.</b> On Delaunay and Collapse the canvas is where the playing happens; on
+      Tree it's where you grab the wind. The pages underneath are for setting up what the canvas
+      will do.</li>
+    <li><b>Or play notes instead.</b> Tree also has an on-screen keyboard, for hearing exactly
+      what one hit does rather than a whole loop.</li>
   </ol>
   <p>Both run in a browser with no install. Headphones are worth it &mdash; feedback and freeze
     build up quickly, and the stereo field is where a lot of the detail sits.</p>
 </section>
 
 <footer>
-  <span>Delaunay - geometric delay &amp; freeze.</span>
+  <span>Delaunayed - unconventional delays.</span>
   <span><a href="index.html">Index</a> &middot; <a href="README.md">README</a></span>
 </footer>
 

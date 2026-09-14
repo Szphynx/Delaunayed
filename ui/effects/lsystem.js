@@ -121,7 +121,13 @@ var DLNY = window.DLNY || (window.DLNY = {});
         },
         controls: function (s) {
           return [
-            { label: 'Trunk', obj: s, key: 'baseLen', min: 0.05, max: 0.7, step: 0.01,
+            // Trunk is also the pre-delay: the very first tap's time is
+            // exactly baseLen (n.t at depth 0 = baseLen * ratio^0). 0.05
+            // (50ms) used to be the floor, so a hit could never land closer
+            // than that -- Decay doesn't touch it, since Decay is gain per
+            // depth, not time. Down to 2ms now, close enough to feel attached
+            // to the transient rather than a fixed slapback.
+            { label: 'Trunk', obj: s, key: 'baseLen', min: 0.002, max: 0.7, step: 0.002,
               fmt: function (v) { return Math.round(v * 1000) + 'ms'; } },
             { label: 'Ratio', obj: s, key: 'ratio', min: 0.4, max: 0.98, step: 0.01,
               fmt: function (v) { return (+v).toFixed(2); } },
@@ -197,9 +203,22 @@ var DLNY = window.DLNY || (window.DLNY = {});
     tick: function (s, seconds) {
       s.t = seconds;
       var w = s.hold == null ? LSystem.wind(seconds, params(s)) : s.hold * 1.6;
-      if (!s.dirty && Math.abs(w - s.w) < 0.002) { s.w = w; return true; }
+      var p = params(s);
+      // The wind-delta check alone used to be the only reason to regrow, so
+      // moving a non-structural knob (Trunk, Ratio, Decay, Angle, Tone,
+      // Scale, Root, Spread, Width) only took visible/audible effect once
+      // the wind next happened to drift -- on a calm preset (Amount near 0)
+      // that could be seconds away, or never. A cheap signature of every
+      // param regrow() reads catches a real change immediately; the wind
+      // check on top of it is still what keeps a still knob from regrowing
+      // 60 times a second for no reason while the wind sways on its own.
+      var sig = p.branch + '|' + p.angle + '|' + p.ratio + '|' + p.decay + '|' +
+        p.baseLen + '|' + p.maxDepth + '|' + p.centsPerDeg + '|' + p.key + '|' +
+        p.rootSemi + '|' + p.windAmount + '|' + p.windRate + '|' + p.gust;
+      if (!s.dirty && sig === s.paramSig && Math.abs(w - s.w) < 0.002) { s.w = w; return true; }
+      s.paramSig = sig;
       s.w = w;
-      s.nodes = LSystem.grow(params(s), w);
+      s.nodes = LSystem.grow(p, w);
       s.dirty = false;
       return true;
     },

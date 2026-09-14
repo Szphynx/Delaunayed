@@ -396,3 +396,21 @@ and full in a single sample.
   values are static per tap rather than continuously re-snapped against a moving
   target — but the same fix (duck, then `setTimeout`, not duck-and-swap-immediately)
   would drop straight in if it ever does.
+
+
+## Fixed: a slider change waiting on the wind to notice
+
+`tick()` only regrew the tree when the wind field had moved enough (or a
+structural control had set `s.dirty`), which meant a non-structural knob --
+Trunk, Ratio, Decay, Angle, Tone, Scale, Root, Spread, Width -- wrote its new
+value into state immediately but the tree itself didn't visibly or audibly
+move until the wind next happened to drift past a fixed threshold. On a preset
+with a small Wind Amount that could be seconds away; at Amount 0 (Still Air,
+or CALM) it would never happen on its own.
+
+Fixed by also comparing a cheap signature of every field `grow()` actually
+reads, alongside the existing wind-delta check -- either one changing is
+enough to regrow. Verified directly: setting Trunk now shows up in
+`state.nodes[0].t` within one animation frame in both directions, where it
+previously read the pre-change value for however long the wind took to
+notice.
