@@ -343,18 +343,44 @@ var DLNY_AUDIO = (function () {
     if (!S.play && srcNode) stop();
   }
 
+  // Every other click in this file got a duck (pitch swap, rebuild); the
+  // sample transport never did -- start()/stop() cut the raw buffer source
+  // at an arbitrary sample, which is a click on essentially every press
+  // unless the file happens to start/end at a zero crossing. Same fix, one
+  // gain node: fade it in before start, fade it out and only THEN call
+  // .stop() (setTimeout, same reason as DUCK_MS elsewhere -- an AudioParam
+  // ramp doesn't block the .stop() that follows it in the same tick).
+  var SRC_FADE_MS = 8;
   function start() {
     if (!buffer) { S.play = false; return; }
     stop();
     srcNode = AC.createBufferSource();
     srcNode.buffer = buffer;
     srcNode.loop = document.getElementById('loop').textContent.indexOf('on') > 0;
-    srcNode.connect(master.in); srcNode.connect(master.dry);
+    var fade = AC.createGain();
+    var t = AC.currentTime;
+    fade.gain.setValueAtTime(0.0001, t);
+    fade.gain.linearRampToValueAtTime(1, t + SRC_FADE_MS / 1000);
+    srcNode.connect(fade); fade.connect(master.in); fade.connect(master.dry);
+    srcNode.fade = fade;
     srcNode.onended = function () { srcNode = null; S.play = false; };
     srcNode.start();
   }
   function stop() {
-    if (srcNode) { try { srcNode.stop(); } catch (e) {} srcNode.disconnect(); srcNode = null; }
+    if (!srcNode) return;
+    var node = srcNode, fade = node.fade;
+    srcNode = null;
+    node.onended = null;
+    if (!fade) { try { node.stop(); } catch (e) {} try { node.disconnect(); } catch (e) {} return; }
+    var t = AC.currentTime;
+    fade.gain.cancelScheduledValues(t);
+    fade.gain.setValueAtTime(fade.gain.value, t);
+    fade.gain.linearRampToValueAtTime(0.0001, t + SRC_FADE_MS / 1000);
+    setTimeout(function () {
+      try { node.stop(); } catch (e) {}
+      try { node.disconnect(); } catch (e) {}
+      try { fade.disconnect(); } catch (e) {}
+    }, SRC_FADE_MS + 4);
   }
 
   function say(t) { document.getElementById('hint').textContent = t; }
