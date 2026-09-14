@@ -51,10 +51,12 @@ var DLNY = window.DLNY || (window.DLNY = {});
     baseLen: 0.45, decay: 0.82, tone: 6500, spread: 100,
     keyIdx: KEYS.indexOf('minor_pentatonic'), rootSemi: 0, centsPerDeg: 8,
     windAmount: 0.35, windRate: 0.10, gust: 0.5,
-    master: 80, dry: 70, wet: 85,
-    // experimental — both default to 0, which is a hard no-op: nothing about
-    // an existing preset changes until one of these is turned up by hand.
-    feedback: 0, speed: 0, hueRoot: 0, audioReact: 0, levels: [], flowField: 0,
+    master: 80, dry: 70, wet: 85, feedback: 0,
+    // experimental — default to 0, a hard no-op: nothing about an existing
+    // preset changes until one of these is turned up by hand. Family Hue is
+    // the one exception (defaults on) -- proven enough to want as the normal
+    // look, while staying a toggle here rather than a permanent behavior.
+    speed: 0, hueRoot: 1, audioReact: 0, levels: [], flowField: 0,
     gusts: [], gustTimer: 0,
     // live
     t: 0, w: 0, hold: null, nodes: [], dirty: true
@@ -158,7 +160,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
     name: 'Tree',
     meta: 'AUDIO FX · LSY-01',
     state: S,
-    tabs: ['TREE', 'TIME', 'KEY', 'WIND', 'OUT', 'EXP', 'FLOW'],
+    tabs: ['TREE', 'TIME', 'KEY', 'WIND', 'OUT', 'EXP'],
 
     transport: function (s) {
       return [
@@ -212,7 +214,10 @@ var DLNY = window.DLNY || (window.DLNY = {});
               fmt: function (v) { return (+v).toFixed(2); } },
             { label: 'Decay', obj: s, key: 'decay', min: 0.4, max: 0.92, step: 0.01,
               fmt: function (v) { return (+v).toFixed(2); } },
-            { label: 'Tone', obj: s, key: 'tone', min: 400, max: 16000, step: 100, fmt: F.hz }
+            // Graduated out of EXP: the 0.85 hard ceiling (see build() in the
+            // engine) keeps it safe at every Decay setting, so it no longer
+            // needs the "unproven" page to sit on.
+            { label: 'Feedback', obj: s, key: 'feedback', min: 0, max: 90, fmt: F.pct }
           ];
         }
       },
@@ -238,19 +243,25 @@ var DLNY = window.DLNY || (window.DLNY = {});
               fmt: function (v) { return (+v).toFixed(2); } },
             { label: 'Rate', obj: s, key: 'windRate', min: 0.02, max: 1.2, step: 0.01,
               fmt: function (v) { return (+v).toFixed(2) + 'Hz'; } },
-            { label: 'Gust', obj: s, key: 'gust', min: 0, max: 1, step: 0.01, fmt: function (v) { return Math.round(v * 100) + '%'; } }
+            { label: 'Gust', obj: s, key: 'gust', min: 0, max: 1, step: 0.01, fmt: function (v) { return Math.round(v * 100) + '%'; } },
+            // wind() is one number shared by the whole tree at any instant
+            // (bent per-depth, never per-location); Flow Field is what
+            // actually varies wind BY WHERE a branch sits, so it lives here
+            // with the rest of wind rather than off in EXP.
+            { label: 'Flow Field', obj: s, key: 'flowField', min: 0, max: 1, step: 1,
+              fmt: function (v) { return v ? 'On' : 'Off'; } }
           ];
         }
       },
       EXP: {
         // Untested ideas live here, not in TREE/TIME/WIND, so trying one can
         // never quietly change what a saved preset sounds like — every
-        // control on this page is 0 at every factory preset and stays 0
-        // until it's turned up by hand.
-        context: function () { return 'unproven — 0% is always a no-op'; },
+        // control on this page defaults to a no-op and stays one until it's
+        // turned up by hand (Family Hue is the exception: it starts on, see
+        // its own state comment).
+        context: function () { return 'unproven'; },
         controls: function (s) {
           return [
-            { label: 'Feedback', obj: s, key: 'feedback', min: 0, max: 90, fmt: F.pct },
             { label: 'Speed', obj: s, key: 'speed', min: 0, max: 100, fmt: F.pct },
             { label: 'Family Hue', obj: s, key: 'hueRoot', min: 0, max: 1, step: 1,
               fmt: function (v) { return v ? 'On' : 'Off'; } },
@@ -266,21 +277,6 @@ var DLNY = window.DLNY || (window.DLNY = {});
           ];
         }
       },
-      FLOW: {
-        // Same no-op convention as EXP, its own tab only because EXP is
-        // already at the rack's 4-control limit. wind() is one number
-        // shared by the whole tree at any instant (bent per-depth, never
-        // per-location); this is what actually varies wind BY WHERE a
-        // branch is, and it's the one EXP feature that draws something of
-        // its own (the arrow field), so it earns the extra tab.
-        context: function () { return 'unproven — Off is always a no-op'; },
-        controls: function (s) {
-          return [
-            { label: 'Flow Field', obj: s, key: 'flowField', min: 0, max: 1, step: 1,
-              fmt: function (v) { return v ? 'On' : 'Off'; } }
-          ];
-        }
-      },
       OUT: {
         // Master leads: it is the loudest control on the device and the one a
         // player reaches for without thinking, so it goes first in the page a
@@ -290,7 +286,8 @@ var DLNY = window.DLNY || (window.DLNY = {});
           return [
             { label: 'Master', obj: s, key: 'master', min: 0, max: 100, fmt: F.pct },
             { label: 'Dry', obj: s, key: 'dry', min: 0, max: 100, fmt: F.pct },
-            { label: 'Wet', obj: s, key: 'wet', min: 0, max: 100, fmt: F.pct }
+            { label: 'Wet', obj: s, key: 'wet', min: 0, max: 100, fmt: F.pct },
+            { label: 'Tone', obj: s, key: 'tone', min: 400, max: 16000, step: 100, fmt: F.hz }
           ];
         }
       }
