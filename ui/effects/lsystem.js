@@ -54,7 +54,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
     master: 80, dry: 70, wet: 85,
     // experimental — both default to 0, which is a hard no-op: nothing about
     // an existing preset changes until one of these is turned up by hand.
-    feedback: 0, speed: 0, hueRoot: 0,
+    feedback: 0, speed: 0, hueRoot: 0, audioReact: 0, levels: [],
     // live
     t: 0, w: 0, hold: null, nodes: [], dirty: true
   };
@@ -174,6 +174,12 @@ var DLNY = window.DLNY || (window.DLNY = {});
             { label: 'Feedback', obj: s, key: 'feedback', min: 0, max: 90, fmt: F.pct },
             { label: 'Speed', obj: s, key: 'speed', min: 0, max: 100, fmt: F.pct },
             { label: 'Family Hue', obj: s, key: 'hueRoot', min: 0, max: 1, step: 1,
+              fmt: function (v) { return v ? 'On' : 'Off'; } },
+            // Off (default) costs nothing extra: the chassis never reads the
+            // per-voice analysers it already keeps running. On, draw() reads
+            // s.levels -- written every frame by the audio engine, not by
+            // this spec, which stays audio-agnostic.
+            { label: 'Audio React', obj: s, key: 'audioReact', min: 0, max: 1, step: 1,
               fmt: function (v) { return v ? 'On' : 'Off'; } }
           ];
         }
@@ -228,7 +234,8 @@ var DLNY = window.DLNY || (window.DLNY = {});
     draw: function (ctx, W, H, s) {
       if (!s.nodes.length) s.nodes = LSystem.grow(params(s), 0);
       TreeTravel.paint(ctx, W, H, s.nodes, (s.t * 0.3) % (TreeTravel.span(s.nodes) + 1.2),
-                       { labels: W > 320, familyHue: !!s.hueRoot, rootSemi: s.rootSemi });
+                       { labels: W > 320, familyHue: !!s.hueRoot, rootSemi: s.rootSemi,
+                         levels: s.audioReact ? s.levels : null });
     },
 
     // Master sits in every readout, not just the OUT page — the one thing on

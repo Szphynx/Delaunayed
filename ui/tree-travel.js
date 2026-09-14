@@ -199,10 +199,25 @@
     ctx.fillStyle = opts.bg || '#08192a';
     ctx.fillRect(0, 0, W, H);
 
+    // EXP's Audio React: opts.levels is a plain array of 0..1 numbers, one
+    // per node.i, the chassis measured off that voice's own output this
+    // frame (an AnalyserNode -- real, not modelled). Everything before this
+    // was gain-only: n.gain is the tree's SHAPE (falls with depth, fixed
+    // once grown) so a silent tree and a screaming one drew identically.
+    // Levels replace gain as the brightness/width driver but keep a dim
+    // floor at 15% of it, so the untriggered shape still reads as a tree
+    // rather than vanishing between hits.
+    var lv = opts.levels;
+    var vgain = lv ? function (n) {
+      var v = lv[n.i]; if (v == null) v = 0;
+      return Math.max(0.15 * n.gain, Math.min(1, v));
+    } : function (n) { return n.gain; };
+
     var f = frame(nodes, t);
     nodes.forEach(function (n) {
-      ctx.strokeStyle = 'hsl(' + hue(n) + ' 62% ' + Math.min(70, 34 + 40 * n.gain) + '%)';
-      ctx.lineWidth = Math.max(0.6, 4 * n.gain);
+      var g = vgain(n);
+      ctx.strokeStyle = 'hsl(' + hue(n) + ' 62% ' + Math.min(70, 34 + 40 * g) + '%)';
+      ctx.lineWidth = Math.max(0.6, 4 * g);
       ctx.beginPath();
       ctx.moveTo(TX(n.px), TY(n.py));
       ctx.lineTo(TX(n.x), TY(n.y));
@@ -213,7 +228,7 @@
       ctx.fillStyle = 'hsl(' + hue(n) + ' 85% 64%)';
       ctx.globalAlpha = Math.max(0.25, 1 - f[i].since * 1.1);
       ctx.beginPath();
-      ctx.arc(TX(n.x), TY(n.y), Math.max(1.4, 3.2 * n.gain + (f[i].since < 0.3 ? 6 * f[i].since : 0)), 0, 6.284);
+      ctx.arc(TX(n.x), TY(n.y), Math.max(1.4, 3.2 * vgain(n) + (f[i].since < 0.3 ? 6 * f[i].since : 0)), 0, 6.284);
       ctx.fill();
       ctx.globalAlpha = 1;
     });

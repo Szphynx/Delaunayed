@@ -129,6 +129,7 @@
 var DLNY_AUDIO = (function () {
   var S = DLNY.lsystem.state;
   var AC = null, master = null, voices = [], buffer = null, srcNode = null, shape = '';
+  var levelBuf = new Uint8Array(32);
 
   function ensureAC() {
     if (AC) return;
@@ -249,7 +250,7 @@ var DLNY_AUDIO = (function () {
       killPitch(v);
       v.swapId = (v.swapId || 0) + 1;          // orphan any setPitch swap still waiting on this voice
       try { v.lfo.stop(); } catch (e) {}
-      [v.in, v.delay, v.lp, v.tap, v.duck, v.gain, v.pan, v.fb, v.lfo, v.lfoGain].forEach(function (n) {
+      [v.in, v.delay, v.lp, v.tap, v.duck, v.gain, v.pan, v.fb, v.lfo, v.lfoGain, v.analyser].forEach(function (n) {
         try { n.disconnect(); } catch (e) {}
       });
     });
@@ -269,6 +270,15 @@ var DLNY_AUDIO = (function () {
       v.in.connect(v.delay); v.delay.connect(v.lp);
       v.duck.connect(v.gain);
       v.gain.connect(v.pan); v.pan.connect(master.wet);
+
+      // EXP's Audio React taps this voice's actual output. A parallel tap,
+      // not a series insert -- an AnalyserNode with nothing connected past
+      // it is a dead end for audio but a live one for reading, so it costs
+      // nothing in the signal path. fftSize 32 is the smallest WebAudio
+      // allows: this is a peak meter, not a spectrum, and sync() reads
+      // all ~30 of these once a frame only when the toggle is on.
+      v.analyser = AC.createAnalyser(); v.analyser.fftSize = 32;
+      v.gain.connect(v.analyser);
 
       // ---- EXPERIMENTAL: per-branch feedback and speed (EXP tab) ----
       // Both start at 0 gain, so an un-touched device is bit-for-bit the
@@ -330,6 +340,22 @@ var DLNY_AUDIO = (function () {
       v.lfoGain.gain.setTargetAtTime(
         (S.speed / 100) * Math.min(0.012, baseMs * 0.15) * (1 + n.depth * 0.4), now, 0.05);
     });
+    // EXP's Audio React: peak level per voice, written back into S.levels for
+    // the (audio-agnostic) draw spec to read. Off is free -- the analysers
+    // keep running either way (see build()), this loop is the only cost, and
+    // it's skipped entirely when nobody's looking at it.
+    if (S.audioReact) {
+      if (S.levels.length !== voices.length) S.levels = new Array(voices.length).fill(0);
+      voices.forEach(function (v, i) {
+        v.analyser.getByteTimeDomainData(levelBuf);
+        var peak = 0;
+        for (var j = 0; j < levelBuf.length; j++) {
+          var d = Math.abs(levelBuf[j] - 128);
+          if (d > peak) peak = d;
+        }
+        S.levels[i] = peak / 128;
+      });
+    }
     // Ramped, not set directly, for the same reason every per-voice param
     // above is: dragging a slider fires this many times a second, and a bare
     // .value= jump on each one is exactly what a zipper/stepping sound is.
