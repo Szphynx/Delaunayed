@@ -68,28 +68,26 @@ var DLNY = window.DLNY || (window.DLNY = {});
              flowField: s.flowField };
   }
 
-  // Flow Field (EXP): a small grid across the tree's own extent, each point
-  // sampling LSystem.flow() -- plain {x,y,fx,fy} numbers, so TreeTravel
-  // never needs to know LSystem exists (see its own comment on this).
-  function flowGrid(nodes, t, engagement) {
-    if (!nodes.length) return [];
-    var xs = nodes.map(function (n) { return n.x; }).concat([0]);
-    var ys = nodes.map(function (n) { return n.y; }).concat([0]);
-    var minx = Math.min.apply(null, xs), maxx = Math.max.apply(null, xs);
-    var miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys);
-    var cols = 4, rows = 3, out = [];
-    for (var r = 0; r < rows; r++) {
-      for (var c = 0; c < cols; c++) {
-        var x = minx + (maxx - minx) * (c + 0.5) / cols;
-        var y = miny + (maxy - miny) * (r + 0.5) / rows;
-        var fl = LSystem.flow(x, y, t);
-        var m = Math.hypot(fl.fx, fl.fy) * engagement;
-        // "Toggle them only when there's wind in the area": a calm patch of
-        // the field draws no arrow at all rather than a faint one everywhere.
-        if (m < 0.12) continue;
-        out.push({ x: x, y: y, fx: fl.fx, fy: fl.fy, m: m });
+  // Flow Field (EXP): arrows only in a small cluster around each gust's
+  // CURRENT head, not a grid across the whole tree -- the field is only
+  // shown where the traveling line/arrow actually is right now, so it reads
+  // as local turbulence around the gust rather than wallpaper. No gusts (no
+  // real wind in the area, per updateGusts' own gate) means no arrows at
+  // all. Plain {x,y,fx,fy,m} numbers, so TreeTravel never needs to know
+  // LSystem exists (see its own comment on this).
+  var FLOW_RADIUS = 55;
+  function flowGrid(gusts, t) {
+    var out = [];
+    (gusts || []).forEach(function (g) {
+      for (var dx = -1; dx <= 1; dx++) {
+        for (var dy = -1; dy <= 1; dy++) {
+          var x = g.x + dx * FLOW_RADIUS, y = g.y + dy * FLOW_RADIUS;
+          var fl = LSystem.flow(x, y, t), m = Math.hypot(fl.fx, fl.fy);
+          if (m < 0.1) continue;
+          out.push({ x: x, y: y, fx: fl.fx, fy: fl.fy, m: m });
+        }
       }
-    }
+    });
     return out;
   }
 
@@ -334,11 +332,10 @@ var DLNY = window.DLNY || (window.DLNY = {});
 
     draw: function (ctx, W, H, s) {
       if (!s.nodes.length) s.nodes = LSystem.grow(params(s), 0);
-      var engagement = Math.min(1, Math.abs(s.w || 0) * (s.windAmount || 0));
       TreeTravel.paint(ctx, W, H, s.nodes, (s.t * 0.3) % (TreeTravel.span(s.nodes) + 1.2),
                        { labels: W > 320, familyHue: !!s.hueRoot, rootSemi: s.rootSemi,
                          levels: s.audioReact ? s.levels : null,
-                         flowArrows: s.flowField ? flowGrid(s.nodes, s.t, engagement) : null,
+                         flowArrows: s.flowField ? flowGrid(s.gusts, s.t) : null,
                          gusts: s.flowField ? s.gusts : null, gustLife: GUST_LIFE });
     },
 
