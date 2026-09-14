@@ -182,10 +182,16 @@
     var ox = W / 2 - k * (minx + maxx) / 2, oy = H - pad + k * maxy;
     var TX = function (x) { return ox + k * x; }, TY = function (y) { return oy + k * y; };
     // Blue through teal only: pitch reads as a shift within one family rather
-    // than a rainbow, which is what keeps a swaying tree legible.
+    // than a rainbow, which is what keeps a swaying tree legible. EXP's
+    // Family Hue picks which family: it rotates the same 60deg band around
+    // the wheel by root note, spaced a fifth apart per semitone (root*7 mod
+    // 12) rather than chromatically, so neighbouring roots (a fourth or
+    // fifth apart) land on visually related hues the way they sound related
+    // -- semitone neighbours (which sound unrelated) don't.
+    var base = opts.familyHue ? (((opts.rootSemi || 0) * 7 % 12 + 12) % 12) / 12 * 360 : 158;
     var hue = function (n) {
       var v = n.semi == null ? n.depth * 2 : n.semi;
-      return 158 + Math.max(0, Math.min(60, v * 2.4 + 30));
+      return base + Math.max(0, Math.min(60, v * 2.4 + 30));
     };
 
     // The chassis hands over a canvas it does not clear — each spec paints its
