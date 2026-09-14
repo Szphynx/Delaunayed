@@ -167,7 +167,18 @@
     var ys = nodes.map(function (n) { return n.y; }).concat([0]);
     var minx = Math.min.apply(null, xs), maxx = Math.max.apply(null, xs);
     var miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys);
-    var k = Math.min((W - 2 * pad) / ((maxx - minx) || 1), (H - 2 * pad) / ((maxy - miny) || 1));
+    // Fitting the tree to the canvas every frame is right when comparing
+    // very different presets (a wide Storm against a tight Koto Rain), but
+    // it also perfectly cancels out any real size change within one tree --
+    // a 2ms Trunk and a 700ms Trunk both just get rescaled to fill the same
+    // box, so the actual growth was invisible even though the geometry was
+    // correct. Capping how far it can zoom IN (never zoom in past what a
+    // roughly-default-sized tree would need) lets a genuinely smaller tree
+    // look smaller, while an oversized one still shrinks to avoid clipping.
+    var REF_W = 730, REF_H = 400;
+    var kFit = Math.min((W - 2 * pad) / ((maxx - minx) || 1), (H - 2 * pad) / ((maxy - miny) || 1));
+    var kRef = Math.min((W - 2 * pad) / REF_W, (H - 2 * pad) / REF_H);
+    var k = Math.min(kFit, kRef);
     var ox = W / 2 - k * (minx + maxx) / 2, oy = H - pad + k * maxy;
     var TX = function (x) { return ox + k * x; }, TY = function (y) { return oy + k * y; };
     // Blue through teal only: pitch reads as a shift within one family rather

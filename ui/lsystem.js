@@ -112,7 +112,12 @@
         walk(i, t, g, heading + spread * p.angle, depth + 1, nx, ny, len * p.ratio);
       }
     }
-    walk(-1, 0, 1, 0, 0, 0, 0, 150);
+    // Trunk is baseLen, in seconds of delay time -- it used to only feed
+    // t (audio), leaving the drawn length hardcoded at 150 regardless, so
+    // the one knob named after the trunk couldn't grow it. 333px/sec keeps
+    // the default (baseLen 0.45) at the old 150px so no existing tree jumps;
+    // an 8px floor keeps a 2ms trunk from collapsing to an unusable dot.
+    walk(-1, 0, 1, 0, 0, 0, 0, Math.max(8, p.baseLen * 333));
     return nodes;
   }
 
