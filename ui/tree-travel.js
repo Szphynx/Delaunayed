@@ -199,24 +199,62 @@
     ctx.fillStyle = opts.bg || '#08192a';
     ctx.fillRect(0, 0, W, H);
 
-    // Flow Field (EXP): opts.flowArrows is a plain {x,y,fx,fy} array in the
-    // grower's own coordinates -- the chassis samples LSystem.flow() itself
-    // and hands over numbers, same contract as levels above, so this module
-    // still never calls into LSystem. Drawn first, low alpha and additive
-    // blending, so the arrows read as a backdrop the tree sits on top of,
-    // not competing lines.
+    // Flow Field (EXP): opts.flowArrows is a plain {x,y,fx,fy,m} array in the
+    // grower's own coordinates -- the chassis samples LSystem.flow() itself,
+    // already dropped the calm ones and attached m (local strength), same
+    // contract as levels above, so this module still never calls into
+    // LSystem. Drawn first, additive blending, so they read as a backdrop
+    // the tree sits on top of, not competing lines. A strong, saturated blue
+    // (not the tree's own teal-ish palette) and alpha scaled by m is the
+    // contrast: a barely-there gust fades in, a strong one reads clearly.
     if (opts.flowArrows && opts.flowArrows.length) {
       ctx.save();
-      ctx.globalAlpha = 0.32;
       ctx.globalCompositeOperation = 'lighter';
-      ctx.strokeStyle = '#4fb0ff';
-      ctx.lineWidth = 1;
+      ctx.strokeStyle = '#2f6bff';
+      ctx.lineWidth = 1.2;
       var ARROW_LEN = 44;
       opts.flowArrows.forEach(function (a) {
+        ctx.globalAlpha = 0.3 + 0.55 * Math.min(1, a.m || 1);
         var x1 = TX(a.x), y1 = TY(a.y);
         var x2 = TX(a.x + a.fx * ARROW_LEN), y2 = TY(a.y + a.fy * ARROW_LEN);
         var ang = Math.atan2(y2 - y1, x2 - x1), head = 5;
         ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - head * Math.cos(ang - 0.5), y2 - head * Math.sin(ang - 0.5));
+        ctx.moveTo(x2, y2);
+        ctx.lineTo(x2 - head * Math.cos(ang + 0.5), y2 - head * Math.sin(ang + 0.5));
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
+    // Flow Field's gusts: each is a point advected along the field itself
+    // (opts.gusts, a plain {x,y,age,path:[{x,y}]} array -- the chassis
+    // integrates LSystem.flow(), this module just draws the resulting path).
+    // A long-but-not-endless line with an arrowhead at the leading edge,
+    // fading in as it's born and out as it approaches opts.gustLife, so it
+    // reads as a gust passing through rather than a mark that appears and
+    // vanishes on/off.
+    if (opts.gusts && opts.gusts.length) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = '#3d7bff';
+      ctx.lineWidth = 2;
+      var life = opts.gustLife || 2.2;
+      opts.gusts.forEach(function (g) {
+        if (g.path.length < 2) return;
+        var frac = Math.min(1, g.age / life);
+        ctx.globalAlpha = 0.75 * Math.sin(Math.PI * Math.min(1, frac * 1.15));
+        ctx.beginPath();
+        g.path.forEach(function (pt, i) {
+          var X = TX(pt.x), Y = TY(pt.y);
+          if (i === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+        });
+        ctx.stroke();
+        var n = g.path.length, a = g.path[n - 2], b = g.path[n - 1];
+        var x1 = TX(a.x), y1 = TY(a.y), x2 = TX(b.x), y2 = TY(b.y);
+        var ang = Math.atan2(y2 - y1, x2 - x1), head = 7;
         ctx.beginPath();
         ctx.moveTo(x2, y2);
         ctx.lineTo(x2 - head * Math.cos(ang - 0.5), y2 - head * Math.sin(ang - 0.5));

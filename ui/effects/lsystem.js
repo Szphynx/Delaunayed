@@ -55,6 +55,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
     // experimental — both default to 0, which is a hard no-op: nothing about
     // an existing preset changes until one of these is turned up by hand.
     feedback: 0, speed: 0, hueRoot: 0, audioReact: 0, levels: [], flowField: 0,
+    gusts: [], gustTimer: 0,
     // live
     t: 0, w: 0, hold: null, nodes: [], dirty: true
   };
@@ -70,7 +71,7 @@ var DLNY = window.DLNY || (window.DLNY = {});
   // Flow Field (EXP): a small grid across the tree's own extent, each point
   // sampling LSystem.flow() -- plain {x,y,fx,fy} numbers, so TreeTravel
   // never needs to know LSystem exists (see its own comment on this).
-  function flowGrid(nodes, t) {
+  function flowGrid(nodes, t, engagement) {
     if (!nodes.length) return [];
     var xs = nodes.map(function (n) { return n.x; }).concat([0]);
     var ys = nodes.map(function (n) { return n.y; }).concat([0]);
@@ -82,10 +83,60 @@ var DLNY = window.DLNY || (window.DLNY = {});
         var x = minx + (maxx - minx) * (c + 0.5) / cols;
         var y = miny + (maxy - miny) * (r + 0.5) / rows;
         var fl = LSystem.flow(x, y, t);
-        out.push({ x: x, y: y, fx: fl.fx, fy: fl.fy });
+        var m = Math.hypot(fl.fx, fl.fy) * engagement;
+        // "Toggle them only when there's wind in the area": a calm patch of
+        // the field draws no arrow at all rather than a faint one everywhere.
+        if (m < 0.12) continue;
+        out.push({ x: x, y: y, fx: fl.fx, fy: fl.fy, m: m });
       }
     }
     return out;
+  }
+
+  // Gusts: a couple of traveling streaks, not a static grid, so "the rush of
+  // wind" reads as something passing THROUGH the space rather than a fixed
+  // decoration. Each one is a point advected by LSystem.flow() itself (so it
+  // literally traces a streamline of the same field the arrows show), with a
+  // short trailing path for the line and an age that kills it -- no physics
+  // engine, just position += velocity * dt against the one field function
+  // that already exists.
+  var MAX_GUSTS = 2, GUST_LIFE = 2.2, GUST_STEP = 70, GUST_TRAIL = 16;
+  function spawnGust(nodes, t) {
+    var xs = nodes.map(function (n) { return n.x; }).concat([0]);
+    var ys = nodes.map(function (n) { return n.y; }).concat([0]);
+    var minx = Math.min.apply(null, xs), maxx = Math.max.apply(null, xs);
+    var miny = Math.min.apply(null, ys), maxy = Math.max.apply(null, ys);
+    // 6 random candidates, keep the windiest -- a gust starts where the
+    // field is actually strong, not anywhere in the box.
+    var best = null, bestM = -1;
+    for (var i = 0; i < 6; i++) {
+      var x = minx + Math.random() * (maxx - minx), y = miny + Math.random() * (maxy - miny);
+      var fl = LSystem.flow(x, y, t), m = Math.hypot(fl.fx, fl.fy);
+      if (m > bestM) { bestM = m; best = { x: x, y: y }; }
+    }
+    return { x: best.x, y: best.y, age: 0, path: [] };
+  }
+  function updateGusts(s, p, t, dt, w) {
+    s.gusts = s.gusts || [];
+    // "Only when there's wind in the area": gate spawning on the same
+    // engagement the arrows use (how hard the global field is blowing right
+    // now), not just on the toggle being on -- Still Air (windAmount 0)
+    // stays gust-free even with Flow Field switched on.
+    var engagement = Math.min(1, Math.abs(w) * p.windAmount);
+    s.gustTimer = (s.gustTimer == null ? 0 : s.gustTimer) - dt;
+    if (engagement > 0.12 && s.gusts.length < MAX_GUSTS && s.gustTimer <= 0 && s.nodes.length) {
+      s.gusts.push(spawnGust(s.nodes, t));
+      s.gustTimer = 1.1 + Math.random() * 1.6;
+    }
+    s.gusts.forEach(function (g) {
+      var fl = LSystem.flow(g.x, g.y, t);
+      g.x += fl.fx * GUST_STEP * dt;
+      g.y += fl.fy * GUST_STEP * dt;
+      g.age += dt;
+      g.path.push({ x: g.x, y: g.y });
+      if (g.path.length > GUST_TRAIL) g.path.shift();
+    });
+    s.gusts = s.gusts.filter(function (g) { return g.age < GUST_LIFE; });
   }
 
   function applyPreset(s) {
@@ -249,9 +300,14 @@ var DLNY = window.DLNY || (window.DLNY = {});
     },
 
     tick: function (s, seconds) {
+      var dt = Math.max(0, Math.min(0.1, seconds - s.t));
       s.t = seconds;
       var w = s.hold == null ? LSystem.wind(seconds, params(s)) : s.hold * 1.6;
       var p = params(s);
+      // Gusts advect (and spawn/die) every frame regardless of whether the
+      // tree itself needs regrowing below -- they're drawn, not modelled,
+      // so nothing about the tree's own state should gate them.
+      if (p.flowField) updateGusts(s, p, seconds, dt, w);
       // The wind-delta check alone used to be the only reason to regrow, so
       // moving a non-structural knob (Trunk, Ratio, Decay, Angle, Tone,
       // Scale, Root, Spread, Width) only took visible/audible effect once
@@ -278,10 +334,12 @@ var DLNY = window.DLNY || (window.DLNY = {});
 
     draw: function (ctx, W, H, s) {
       if (!s.nodes.length) s.nodes = LSystem.grow(params(s), 0);
+      var engagement = Math.min(1, Math.abs(s.w || 0) * (s.windAmount || 0));
       TreeTravel.paint(ctx, W, H, s.nodes, (s.t * 0.3) % (TreeTravel.span(s.nodes) + 1.2),
                        { labels: W > 320, familyHue: !!s.hueRoot, rootSemi: s.rootSemi,
                          levels: s.audioReact ? s.levels : null,
-                         flowArrows: s.flowField ? flowGrid(s.nodes, s.t) : null });
+                         flowArrows: s.flowField ? flowGrid(s.nodes, s.t, engagement) : null,
+                         gusts: s.flowField ? s.gusts : null, gustLife: GUST_LIFE });
     },
 
     // Master sits in every readout, not just the OUT page — the one thing on
