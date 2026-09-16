@@ -618,54 +618,52 @@ control-rate core** that drops into `js`/`node.script`, exactly as the README's 
 
 **[`prototypes/wfc_sampler.html`](prototypes/wfc_sampler.html)** — open in any browser. A direct sibling
 of the WFC Multitap device above, built by asking a different question of the same solver: a multitap
-tile *shapes an envelope* around whatever audio happens to be arriving; what if the tile *addressed* a
-specific moment in a specific file instead? The grid, the solver, the mixer, the per-lane FX rack, the
-learn-from-example machinery and the device shell are unchanged. What a tile *means* is not.
+tile *shapes an envelope* around whatever audio happens to be arriving; what if a tile just *was* a
+specific piece of a specific file instead? The grid, the solver, the mixer, the per-lane FX rack and the
+device shell are unchanged. What a tile *is* is not — painting a cell means "play exactly this chunk,
+right here," full stop, with no hidden per-lane state deciding what actually sounds.
 
-**The slices are the sample's own transients, not equal chops.** A cheap onset detector
+**The pad count follows the grid.** There's no separate slice-count knob — the number of paintable pads
+equals **Lanes** (one pad per channel, 3–8), kept in sync automatically (`syncPadsToLanes`) whenever
+Lanes changes. **Onset** is a detector sensitivity, not a count: a cheap onset detector
 (`detectTransients` — pre-emphasis, frame energy, peak-pick the positive jumps above a threshold, 60ms
-refractory) cuts the loaded file wherever it actually has an event: a hit, a syllable, a pluck. The
-**Onset** knob is the detector's sensitivity, not a slice count — turn it up and quiet or gradual
-onsets start registering too, so there are more (smaller) slices; turn it down and only the sharpest
-transients survive, so there are fewer (larger) ones. The resulting slice count is read off live (it's
-in the readout and in the lane editor), and it's independent of the step grid.
+refractory) finds the file's real transients first, and `choosePadBounds` then reconciles however many it
+found against however many pads are needed — picking the **strongest** transients (by onset magnitude)
+when there are more candidates than pads, or **subdividing** the existing segments evenly when there are
+fewer, so the grid always gets exactly as many pads as it has lanes either way.
 
-**The tile alphabet becomes cursor moves.** Each lane keeps its own position (a **slice-cursor**) into
-that list of transients. The six tiles are now `silent · fwd · hold · back · leap · flip`:
-- **Fwd / Back** step the cursor one transient forward or backward and play from there.
-- **Hold** replays the slice the cursor is already on — a stutter/repeat.
-- **Leap** jumps the cursor to a random slice — the accent, both loud and structurally surprising.
-- **Flip** plays the *current* slice reversed (and throws hard into the shared feedback line) without
-  moving the cursor — the one move that doesn't advance the read-head, just turns it around.
+**The tile alphabet is the sample, chopped.** Silent stays tile 0; pads 1..Lanes are numbered directly on
+the grid cell (no glyph to decode) and each is a fixed slice of the file — `Slice %` (per-lane) trims how
+much of a pad's own length plays before it fades out, but *which* chunk plays is exactly what's painted.
 
-Reverse playback is precomputed once per sample load (`makeReversed`): AudioBufferSourceNode has no
-negative playback rate, so a Flip is really "play forward through a time-reversed copy of the buffer, at
-the mirrored offset" — the standard trick, done once, not per note.
+**The default rules come from the recording itself, not a hand-authored table.** `buildDefaultRules`
+treats the pads' own chronological order as ground truth: each pad's one "natural" successor is whatever
+pad actually followed it in the file (wrapping the last back to the first), and every pad can also drop
+into a rest — which in turn reopens the *entire* palette. That's what gives Collapse room to reorder:
+short runs of pads still sound like real fragments of the recording, and every rest is a free restart
+point where the next run can pick up anywhere. **Learn ▸ grid** is still there for deriving rules from
+whatever's currently painted/solved instead, exactly as in the WFC Multitap device. Vertical (lane
+stacking) is left fully open — there's no equivalent of "no two Accents stacked" once every tile is just
+a named sound rather than a synthetic dynamic.
 
-**Same solver, better target.** Every adjacency rule, the paint-and-complete workflow, `Re-seed`, and
-**Learn ▸ grid** carry over verbatim — the horizontal/vertical constraints that made a multitap tap
-sequence feel composed (rest → push → settle → maybe jump or flip → decay back to rest) read exactly as
-well as a rule for walking a cursor through a sample. **Learn ▸ sample** replaces Learn ▸ audio: instead
-of analyzing whatever's arriving live, it reads the loaded file's own RMS envelope directly — there's no
-rolling capture buffer in this device at all, every trigger reads straight from the decoded sample (or
-its reverse), so the ScriptProcessor capture node the multitap engine needs is gone entirely.
+**No live-capture buffer, no reverse buffer.** Every trigger reads straight out of the one decoded
+sample — there's nothing rolling and nothing precomputed per direction, so the ScriptProcessor capture
+node the multitap engine needs doesn't exist here at all.
 
-**Mini-scope doubles as a slice map.** The small waveform display doesn't show a captured grain (there
-isn't one); it shows the loaded sample with its slice boundaries marked, and each triggered slice
-flashes in the color of the tile that fired it — a second, sample-accurate view of what the grid is
-doing, live.
+**Mini-scope doubles as a slice map.** The small waveform display shows the loaded sample with its pad
+boundaries marked, and each triggered pad flashes in the color of the tile that fired it — a second,
+sample-accurate view of what the grid is doing, live.
 
 **Everything else matches the WFC Multitap device**: per-lane mixer, lane editor (Pitch, Cutoff, Pan,
-Feedback, **Slice %** in place of Grain len/Tap div — how much of a slice plays before the envelope cuts
-it), the same modular FX rack, master limiter, global Output/Tone/Width/Time, Save/Load presets, and the
-dice. Ships with a short home-recorded sample as the default source (fetched from
+Feedback, Slice %), the same modular FX rack, master limiter, global Output/Tone/Width/Time, Save/Load
+presets, and the dice. Ships with a short home-recorded sample as the default source (fetched from
 `assets/audio/08_wfc_sampler_source.wav`, trimmed from a longer original) — drop your own file on the
 Source strip; the more percussive and varied it is, the more there is to chop.
 
 > **Why this is the better home for WFC:** a multitap can only ever gate or shape audio that's already
 > arriving. A slicer can *reorder* — the grid isn't scheduling effects on a signal any more, it's
-> composing a new sequence out of a fixed set of addressable fragments, which is closer to what "mangle
-> this sample" actually means.
+> composing a new sequence out of a fixed set of addressable, named fragments, which is closer to what
+> "mangle this sample" actually means.
 
 ### Regenerate the assets
 

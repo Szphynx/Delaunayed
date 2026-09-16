@@ -142,8 +142,8 @@
       <div class="row"><label>Step</label><input id="stepdiv" type="range" min="0" max="6" value="0"><span class="val" id="stepdivv">1/16</span></div>
 
       <h2>Rules · learn</h2>
-      <div class="modeline">rules: <b id="modev">hand-written</b></div>
-      <div class="btns"><button id="rHand" class="on">Hand rules</button><button id="rGrid">Learn ▸ grid</button><button id="rAudio">Learn ▸ sample</button></div>
+      <div class="modeline">rules: <b id="modev">source order</b></div>
+      <div class="btns"><button id="rSource" class="on">Source order</button><button id="rGrid">Learn ▸ grid</button></div>
       <div class="row" style="margin-top:10px"><label>Brush</label>
         <span class="seg" style="flex:1"><button id="paint">Paint</button><button id="erase">Rest</button><button id="clr">Clear</button></span></div>
       <div class="tiles" id="brush"></div>
@@ -186,7 +186,7 @@
 
   <div id="chedit"><h2>Lane editor</h2><div id="edbody"><div class="edhint">Click a strip above (or right-click a lane on the map) to edit that lane's voice and add insert effects.</div></div></div>
 
-  <div class="hint"><b>Wave Function Collapse, as a sample slicer.</b> The grid still crystallizes the same way &mdash; hit <b>Collapse</b>, or <b>Paint</b> tiles and complete a pattern around them &mdash; but every tile now steers a <b>slice-cursor</b> through your loaded sample instead of shaping a grain of whatever's passing through live. The slices themselves aren't equal-width chops: they're cut at the sample's own <b>transients</b> (onset detection, tunable with <b>Onset</b>), so each one is a real event in the file &mdash; a hit, a syllable, a pluck. <b>Fwd</b>/<b>Back</b> walk the cursor forward or backward one transient, <b>Hold</b> repeats the current one (a stutter), <b>Leap</b> jumps it to a random one (an accent), <b>Flip</b> plays the current one reversed and throws it hard into the feedback line. <b>Learn ▸ sample</b> reads the loaded file's own envelope and re-weights the rules to match its dynamics. Drop your own file on the Source strip below &mdash; the more percussive and varied, the more there is to chop.</div>
+  <div class="hint"><b>Wave Function Collapse, as a sample slicer.</b> A tile IS a piece of your sample now &mdash; not a move, a move was the old idea. The file is cut into as many pieces as you have <b>Lanes</b> (one pad per channel); <b>Onset</b> tunes how the detector finds those cut points &mdash; picking the sample's biggest transients when it finds more than it needs, subdividing evenly when it finds fewer. Paint a pad onto the grid and that exact chunk plays there, every time. Hit <b>Collapse</b>, or <b>Paint</b> a partial pattern and complete around it; <b>Source order</b> (the default) biases new patterns toward how the pads actually followed each other in the recording, with a rest able to reopen the whole palette at any point &mdash; <b>Learn ▸ grid</b> re-derives the rules from whatever's on the grid instead. Drop your own file on the Source strip below &mdash; the more percussive and varied, the more there is to chop.</div>
   </div>
   </div>
 <script>
@@ -194,23 +194,26 @@
    WFC Sampler — prototype, a sibling of prototypes/wfc_multitap.html.
 
    Same solver, same device shell, same mixer/editor/FX-rack machinery — the
-   difference is entirely in what a tile DOES. wfc_multitap.html reads cells
+   difference is entirely in what a tile IS. wfc_multitap.html reads cells
    into a rolling capture of whatever is passing through the device (a grain
-   engine) or into gated delay taps. Neither one is addressable: a "rise" tile
-   there just shapes an envelope around noise that happens to be arriving.
+   engine) or into gated delay taps — a tile there shapes an envelope around
+   noise that happens to be arriving; it isn't addressable back to anything.
 
-   Here every tile instead moves a per-lane CURSOR across a fixed sample,
-   loaded once and sliced at its own transients (onset detection, not equal
-   chops — see detectTransients below). Fwd/Back walk the cursor; Hold
-   repeats where it is; Leap throws it somewhere new; Flip plays the slice
-   it's already on backwards. The grid stops being a rhythm applied TO
-   audio and becomes a rhythm that CUTS UP a specific audio file — the same
-   solver, aimed at a much better target for "sample mangling".
+   Here a tile IS a literal piece of the loaded sample. The file is cut at
+   its own transients (onset detection, not equal chops — detectTransients
+   below), a handful of those transients become the paintable palette (Pads),
+   and painting/collapsing a cell means exactly "play THIS chunk, right
+   here" — what you draw is what you hear, with no hidden per-lane state in
+   between. The default adjacency rules aren't hand-authored either: they're
+   derived from the one real example every sample already provides — the
+   order its own pads occurred in (buildDefaultRules) — so Collapse produces
+   new rhythms that still sound like fragments of the same recording,
+   reshuffled through the rest-breaks that reopen the whole palette.
 
    No live-capture buffer is needed at all (the deprecated ScriptProcessor
    capture in the multitap prototype is gone): every trigger reads directly
-   from the decoded sample buffer (or its precomputed time-reverse), so what
-   you hear is always addressable back to a specific moment in the file.
+   from the decoded sample buffer, so what you hear is always addressable
+   back to a specific moment in the file.
    ========================================================================= */
 const cv=document.getElementById('cv'), ctx2d=cv.getContext('2d'); const W=cv.width,H=cv.height;
 const waveCv=document.getElementById('wave'), wctx=waveCv.getContext('2d');
@@ -225,40 +228,32 @@ const DIVS=[
  {label:'1/4',beats:1}
 ];
 
-/* ---------- tiles (the WFC alphabet = slice-cursor moves) ---------- */
-const T_SIL=0,T_FWD=1,T_HOLD=2,T_BACK=3,T_LEAP=4,T_FLIP=5, NT=6;
-const TILES=[
- {key:'silent', name:'Silent', col:'#20283a', gain:0.0,  send:0.0,  lenK:1.0, envc:'flat'},
- {key:'fwd',    name:'Fwd',    col:'#5ad1c8', gain:0.62, send:0.18, lenK:1.15,envc:'rise'},
- {key:'hold',   name:'Hold',   col:'#6ab0f2', gain:0.5,  send:0.15, lenK:1.4, envc:'sus'},
- {key:'back',   name:'Back',   col:'#f2a65a', gain:0.46, send:0.12, lenK:0.9, envc:'fall'},
- {key:'leap',   name:'Leap',   col:'#ff3b6b', gain:1.0,  send:0.30, lenK:0.7, envc:'acc'},
- {key:'flip',   name:'Flip',   col:'#c86bfa', gain:0.55, send:1.0,  lenK:1.1, envc:'sus'},
-];
-const BIT=t=>1<<t, FULL=(1<<NT)-1;
+/* ---------- tiles (the WFC alphabet = literal slices of the sample) ----
+   Painting a cell no longer means "move a cursor" — it means "play THIS
+   chunk of the file, right here." Silent (0) is fixed; pads 1..PADS are
+   each one slice, chosen by choosePadBounds (further down) from however
+   many real transients the sample has. PADS itself isn't its own control —
+   it tracks LANES 1:1 ("divided amongst how many channels there are"), kept
+   in sync by syncPadsToLanes wherever LANES changes. NT — and every bitmask
+   sized from it — changes whenever PADS does, so PADS/NT/FULL/TILES are
+   `let`, not `const`. */
+let PADS=6, NT=PADS+1, FULL=(1<<NT)-1, TILES=[];
+const T_SIL=0;
+function rebuildTiles(){
+  NT=PADS+1;FULL=(1<<NT)-1;
+  TILES=[{key:'silent',name:'Silent',col:'#20283a',gain:0.0,send:0.0}];
+  for(let k=0;k<PADS;k++){
+    TILES.push({key:'pad'+(k+1),name:'P'+(k+1),col:'hsl('+Math.round(k*360/PADS)+',65%,58%)',gain:0.85,send:0.22,pad:k});
+  }
+  if(paintTile>=NT)paintTile=1;
+}
+const BIT=t=>1<<t;
 function popcount(m){let c=0;while(m){m&=m-1;c++;}return c;}
 function bitsOf(m){const a=[];for(let t=0;t<NT;t++)if(m&(1<<t))a.push(t);return a;}
 function firstTile(m){for(let t=0;t<NT;t++)if(m&(1<<t))return t;return 0;}
 
-/* ---------- adjacency rules ----------
-   Horizontal = time (tile a, then tile b, in the same lane, left→right).
-   Vertical   = lane stacking (a above b at the same step). Reused verbatim
-   from wfc_multitap.html: the rules describe a shape (rest, then a push,
-   settle, maybe a jump or a flip, decay back to rest) that reads just as
-   well as "walk a cursor" as it did as "shape an envelope". */
-const HAND_H=[
- /*silent->*/ [T_SIL,T_FWD,T_HOLD,T_LEAP],
- /*fwd   ->*/ [T_HOLD,T_LEAP,T_FLIP],
- /*hold  ->*/ [T_HOLD,T_BACK,T_LEAP,T_FLIP],
- /*back  ->*/ [T_SIL,T_HOLD,T_BACK],
- /*leap  ->*/ [T_SIL,T_HOLD,T_BACK],
- /*flip  ->*/ [T_HOLD,T_BACK,T_LEAP],
-];
-function handV(a,b){ if(a===T_LEAP&&b===T_LEAP)return false; if(a===T_FLIP&&b===T_FLIP)return false; return true; }
-const HAND_W=[3.2,1.5,2.6,1.6,1.0,0.8];
-
-let allowR,allowL,allowD,allowU,W_,startMask=FULL;
-let rulesMode='hand', learnedInfo='';
+let allowR,allowL,allowD,allowU,W_,startMask=1;
+let rulesMode='source', learnedInfo='';
 function buildRules(okH,okV,weights){
   allowR=new Array(NT).fill(0);allowL=new Array(NT).fill(0);allowD=new Array(NT).fill(0);allowU=new Array(NT).fill(0);
   for(let a=0;a<NT;a++)for(let b=0;b<NT;b++){
@@ -269,12 +264,29 @@ function buildRules(okH,okV,weights){
   startMask=0;for(let t=0;t<NT;t++)if(W_[t]>0.05)startMask|=BIT(t);
   if(!startMask)startMask=FULL;
 }
-function useHandRules(){
-  const setH=HAND_H.map(a=>a.reduce((m,t)=>m|BIT(t),0));
-  buildRules((a,b)=>!!(setH[a]&BIT(b)), handV, HAND_W);
-  rulesMode='hand';learnedInfo='';setModeLine();
+/* The default rules aren't hand-authored — they're read off the one real
+   example every loaded sample already provides: the order its own pads
+   occurred in. Horizontally, each pad's only "natural" successor is the pad
+   that actually followed it in the recording (wrapping the last back to the
+   first) — plus a rest, always. A rest in turn reopens the WHOLE palette, so
+   Collapse keeps producing short runs that sound like real fragments of the
+   file, stitched back together in a new order at every silence. Vertically
+   there's no constraint at all: unlike the old move-tiles (where stacking
+   two Accents or two Flips had an obvious "too much at once" reading),
+   there's no similarly obvious rule for which literal sounds shouldn't
+   stack, so lane-stacking is left fully open. */
+function buildDefaultRules(){
+  const okH=new Array(NT).fill(0);
+  okH[0]=FULL;
+  for(let k=0;k<PADS;k++){
+    const a=k+1, nextB=(k+1<PADS)?k+2:1;
+    okH[a]=BIT(nextB)|BIT(0);
+  }
+  const w=new Array(NT).fill(1); w[0]=Math.max(1,PADS*0.5);
+  buildRules((a,b)=>!!(okH[a]&BIT(b)), ()=>true, w);
+  rulesMode='source';learnedInfo=PADS+' pads · recorded order + rest-breaks';setModeLine();
 }
-function learnFromGrid(g){
+function learnFromGrid(g,label){
   const cols=g.cols,lanes=g.lanes,ti=g.tiles;
   const okH=new Array(NT).fill(0), okV=new Array(NT).fill(0), cnt=new Array(NT).fill(0);
   let pairs=0,used=0;
@@ -286,31 +298,8 @@ function learnFromGrid(g){
   if(used<2){learnedInfo='(nothing to learn)';setModeLine();return false;}
   const w=cnt.map(v=>v>0?v:0.02);
   buildRules((a,b)=>!!(okH[a]&BIT(b)), (a,b)=>!!(okV[a]&BIT(b)), w);
-  rulesMode='learned';learnedInfo='grid · '+used+' cells · '+pairs+' pairs';setModeLine();
+  rulesMode='learned';learnedInfo=(label||'grid')+' · '+used+' cells · '+pairs+' pairs';setModeLine();
   return true;
-}
-/* Learn from the loaded sample itself: RMS-per-step -> leap/hold/silent seed
-   row (its derivative reads as fwd/back), then learn the adjacency style
-   from that seed the same way Learn ▸ grid does. No live capture involved —
-   `buffer` is always the one file every slice is already being cut from. */
-function learnFromAudio(){
-  if(!buffer){learnedInfo='(no sample loaded yet)';setModeLine();return;}
-  const d=buffer.getChannelData(0), steps=COLS, env=new Float32Array(steps);
-  const seg=Math.floor(d.length/steps);
-  let mx=1e-6;
-  for(let s=0;s<steps;s++){let e=0;for(let j=0;j<seg;j++){const v=d[s*seg+j]||0;e+=v*v;}env[s]=Math.sqrt(e/seg);if(env[s]>mx)mx=env[s];}
-  const cols=steps,ex=new Int8Array(LANES*cols).fill(-1);
-  for(let s=0;s<steps;s++){
-    const lv=env[s]/mx, prev=s>0?env[s-1]/mx:0, d1=lv-prev;
-    let t;
-    if(lv<0.14)t=T_SIL; else if(lv>0.72)t=T_LEAP; else if(d1>0.10)t=T_FWD; else if(d1<-0.10)t=T_BACK; else t=T_HOLD;
-    for(let r=0;r<LANES;r++){
-      if(r===0)ex[r*cols+s]=t;
-      else ex[r*cols+s]= (t===T_SIL? T_SIL : (lv>0.5&&r<2? T_HOLD : (lv>0.3? (s%2? T_HOLD:T_SIL): T_SIL)) );
-    }
-  }
-  learnFromGrid({cols,lanes:LANES,tiles:ex});
-  learnedInfo='sample · '+steps+' steps';setModeLine();
 }
 function chooseTile(mask){
   let tot=0;for(let t=0;t<NT;t++)if(mask&BIT(t))tot+=W_[t];
@@ -322,7 +311,7 @@ function chooseTile(mask){
 
 /* ---------- grid + solver state (byte-identical algorithm to wfc_multitap.html) ---------- */
 let COLS=16,LANES=6;
-let cells=null,grid=null,locked=null,lockTile=null,paintTile=T_LEAP,paintMode=false;
+let cells=null,grid=null,locked=null,lockTile=null,paintTile=1,paintMode=false;
 let solving=false,solveDone=false,restarts=0,flashAt={};
 const IDX=(r,c)=>r*COLS+c;
 function allocGrid(){
@@ -377,10 +366,10 @@ function clearLocks(){locked.fill(0);}
 function clearGrid(){locked.fill(0);grid.fill(-1);for(let i=0;i<cells.length;i++)cells[i]=startMask;solveDone=false;solving=false;flashAt={};updateRead();}
 
 /* ---------- lanes (voices) ---------- */
-let lanes=[],siteColors=[],laneCursor=[];
+let lanes=[],siteColors=[];
 const PENTA=[0,3,5,7,10,12,15,17];   // minor-pentatonic semitone spread
 function buildLanes(n){
-  lanes=[];siteColors=[];laneCursor=[];
+  lanes=[];siteColors=[];
   for(let i=0;i<n;i++){
     const hue=Math.round((i*47)%360);
     const pitch=PENTA[Math.min(PENTA.length-1,(n-1-i))];        // bottom lane lowest
@@ -388,8 +377,16 @@ function buildLanes(n){
       pan:clampPan((n>1?(i/(n-1)):0.5)*1.5-0.75),fb:0.3,slicePct:+slicepctEl.value,
       vol:1,mute:false,solo:false,fx:[]});
     siteColors.push('hsl('+hue+',60%,62%)');
-    laneCursor.push(Math.floor(i*SLICES/n)%Math.max(1,SLICES));
   }
+}
+/* Keeps the tile alphabet, its default rules and the slice map all in step
+   with the channel count — call right after every buildLanes(LANES). */
+function syncPadsToLanes(){
+  PADS=Math.max(1,LANES);
+  rebuildTiles();
+  buildDefaultRules();
+  buildBrush();
+  recomputeSlices();
 }
 
 /* ---------- transient detection: slice boundaries = onsets, not equal chops ----
@@ -399,12 +396,13 @@ function buildLanes(n){
    attack stands out over whatever tone preceded it, frame energy over that,
    then peak-pick the positive-going jumps in energy (a simplified spectral-
    flux) above a sensitivity-scaled threshold, with a 60ms refractory period
-   so one hit doesn't register twice. `sliceBounds` is the resulting list of
-   cut points in seconds, always starting at 0 and ending at buf.duration. */
+   so one hit doesn't register twice. Returns the raw onsets found — each a
+   {t, e} pair, time in seconds and the flux magnitude that triggered it —
+   NOT yet cut down or padded out to PADS; choosePadBounds does that next. */
 function detectTransients(buf,sensitivity){
   const d=buf.getChannelData(0),n0=d.length,sr=buf.sampleRate;
   const hop=512,win=1024,frames=Math.max(0,Math.floor((n0-win)/hop));
-  if(frames<2)return [0,buf.duration];
+  if(frames<2)return [];
   const energy=new Float32Array(frames);
   for(let i=0;i<frames;i++){
     let s=0;const off=i*hop;let prev=off>0?d[off-1]:0;
@@ -415,23 +413,47 @@ function detectTransients(buf,sensitivity){
   for(let i=1;i<frames;i++){flux[i]=Math.max(0,energy[i]-energy[i-1]);if(flux[i]>mx)mx=flux[i];}
   for(let i=0;i<frames;i++)flux[i]/=mx;
   const amt=Math.max(0,Math.min(100,sensitivity))/100;
-  const thresh=0.5-amt*0.44;                          // more sensitive -> lower bar -> more onsets
+  const thresh=0.5-amt*0.44;                          // more sensitive -> lower bar -> more candidate onsets
   const minGap=Math.max(1,Math.round((sr*0.06)/hop));  // 60ms refractory
-  const bounds=[0];let last=-minGap;
+  const onsets=[];let last=-minGap;
   for(let i=1;i<frames-1;i++){
-    if(flux[i]>thresh&&flux[i]>=flux[i-1]&&flux[i]>=flux[i+1]&&i-last>=minGap){bounds.push(i*hop/sr);last=i;}
+    if(flux[i]>thresh&&flux[i]>=flux[i-1]&&flux[i]>=flux[i+1]&&i-last>=minGap){onsets.push({t:i*hop/sr,e:flux[i]});last=i;}
   }
-  bounds.push(buf.duration);
-  return bounds;
+  return onsets;
+}
+/* Turn the raw onset list into exactly `want` slice boundaries (`want` is
+   PADS — the grid decides the count, one pad per channel). Two cases:
+   - More onsets than pads: keep the `want-1` STRONGEST cuts (by flux, i.e.
+     the sharpest transients) and drop the rest, back in chronological
+     order — "otherwise it chooses the biggest ones".
+   - Fewer onsets than pads (including none, e.g. a very short or quiet
+     file): every real segment between onsets gets subdivided into equal
+     parts until there are `want` slices total, spreading the extra cuts as
+     evenly across segments as the count allows. */
+function choosePadBounds(onsets,duration,want){
+  want=Math.max(1,want);
+  const wantCuts=want-1;
+  if(onsets.length>=wantCuts){
+    const chosen=onsets.slice().sort((a,b)=>b.e-a.e).slice(0,wantCuts).map(o=>o.t).sort((a,b)=>a-b);
+    return [0,...chosen,duration];
+  }
+  const raw=[0,...onsets.map(o=>o.t),duration];
+  const n=raw.length-1,base=Math.floor(want/n),extra=want-base*n;
+  const out=[raw[0]];
+  for(let i=0;i<n;i++){
+    const subs=base+(i<extra?1:0),segStart=raw[i],segEnd=raw[i+1];
+    for(let s=1;s<=subs;s++)out.push(segStart+(segEnd-segStart)*s/subs);
+  }
+  return out;
 }
 let sliceBounds=[0,1],sensitivity=55;
 function sliceStart(i){return sliceBounds[i]||0;}
 function sliceLen(i){const hi=sliceBounds[i+1]!=null?sliceBounds[i+1]:sliceBounds[sliceBounds.length-1];return Math.max(0.02,hi-sliceStart(i));}
 function recomputeSlices(){
-  sliceBounds=buffer?detectTransients(buffer,sensitivity):[0,1];
-  SLICES=Math.max(1,sliceBounds.length-1);
-  const n=Math.max(1,laneCursor.length);
-  laneCursor=laneCursor.map((c,i)=>Math.floor(i*SLICES/n)%SLICES);
+  const onsets=buffer?detectTransients(buffer,sensitivity):[];
+  const dur=buffer?buffer.duration:1;
+  sliceBounds=choosePadBounds(onsets,dur,PADS);
+  SLICES=sliceBounds.length-1;
   updateRead();
 }
 
@@ -470,7 +492,7 @@ function buildFxChain(p){
 }
 
 /* ---------- audio graph ---------- */
-let AC=null,buffer=null,revBuffer=null,srcNode=null,playing=false;
+let AC=null,buffer=null,srcNode=null,playing=false;
 let masterIn,dryGain,wetGain,fxColor,masterBus,limiter,masterAn,outGain,echoDelay,echoFb;
 let BPM=132,stepDivIdx=0,glideMs=60,outputLevel=1,toneHz=18000,widthAmt=1,delayMult=1,globalFb=0.34;
 let SLICES=16;
@@ -706,58 +728,40 @@ function buildLaneNode(i){
 function disposeLaneNode(i){const n=laneNodes[i];if(!n)return;['filt','vol','an','pan','input'].forEach(k=>{if(n[k]){try{n[k].disconnect();}catch(_){}}});try{n.fx.dispose();}catch(_){}}
 function buildLaneNodes(){laneNodes.forEach((_,i)=>disposeLaneNode(i));laneNodes=[];for(let i=0;i<lanes.length;i++)buildLaneNode(i);}
 
-/* ---------- envelope shaping (byte-identical to wfc_multitap.html) ---------- */
-function shapeEnv(g,T,t,len,base){
+/* ---------- envelope shaping ----------
+   Only one shape now: a click-safe fade in, then the pad's own natural decay
+   (already baked into the recording — it's a real transient, not a synthetic
+   contour), trimmed and faded out at whatever length Slice % allows. The old
+   rise/sustain/fall/accent contours don't apply once a tile IS the sound
+   rather than a shape imposed on one. */
+function shapeHitEnv(g,t,len,base){
   const eps=0.0006;
   if(g.cancelAndHoldAtTime)g.cancelAndHoldAtTime(t);else{g.cancelScheduledValues(t);g.setValueAtTime(g.value,t);}
   g.linearRampToValueAtTime(0.0001,t+0.003);
-  if(T.envc==='rise'){g.linearRampToValueAtTime(base,t+len*0.72);g.linearRampToValueAtTime(0.0001,t+len);}
-  else if(T.envc==='sus'){g.linearRampToValueAtTime(base,t+Math.min(0.03,len*0.14));g.setValueAtTime(base,t+len*0.7);g.linearRampToValueAtTime(0.0001,t+len);}
-  else if(T.envc==='fall'){g.linearRampToValueAtTime(base,t+0.006);g.exponentialRampToValueAtTime(Math.max(eps,base*0.02),t+len);g.linearRampToValueAtTime(0.0001,t+len+0.004);}
-  else{g.linearRampToValueAtTime(base,t+0.004);g.exponentialRampToValueAtTime(Math.max(eps,base*0.02),t+len*0.85);g.linearRampToValueAtTime(0.0001,t+len);}
+  g.linearRampToValueAtTime(base,t+0.006);
+  g.exponentialRampToValueAtTime(Math.max(eps,base*0.03),t+Math.max(0.03,len*0.9));
+  g.linearRampToValueAtTime(0.0001,t+len);
 }
 
-/* ---------- the slice engine ----------
-   A time-reversed copy of the whole buffer is precomputed once per sample
-   load (makeReversed) so a Flip tile can play "backwards from here" as a
-   normal forward read at a mirrored offset — AudioBufferSourceNode has no
-   negative playbackRate, so this is the standard trick instead of decoding
-   twice or reversing per-note. */
-function makeReversed(buf){
-  const OC=window.OfflineAudioContext||window.webkitOfflineAudioContext;
-  const ctx=new OC(buf.numberOfChannels,buf.length,buf.sampleRate);
-  const rev=ctx.createBuffer(buf.numberOfChannels,buf.length,buf.sampleRate);
-  for(let c=0;c<buf.numberOfChannels;c++){
-    const src=buf.getChannelData(c),dst=rev.getChannelData(c),n=src.length;
-    for(let i=0;i<n;i++)dst[i]=src[n-1-i];
-  }
-  return rev;
-}
+/* ---------- the pad engine: paint a tile, hear that exact chunk ---------- */
 let sliceFlash={};
 function markSliceFlash(idx,col){sliceFlash[idx]={t:performance.now(),col};}
-function triggerSlice(r,c,tile,time){
+function triggerPad(r,c,tile,time){
   const node=laneNodes[r];if(!node||!node.input||!buffer)return;
   const p=lanes[r],T=TILES[tile];
-  let idx=laneCursor[r]==null?0:laneCursor[r];
-  if(tile===T_FWD)idx=(idx+1)%SLICES;
-  else if(tile===T_BACK)idx=(idx-1+SLICES)%SLICES;
-  else if(tile===T_LEAP)idx=(Math.random()*SLICES)|0;
-  // hold and flip stay on the slice the cursor is already at
-  laneCursor[r]=idx;
-  const reverse=tile===T_FLIP;
-  const start=sliceStart(idx),sliceDur=sliceLen(idx);
+  if(!T||T.pad==null)return;
+  const idx=T.pad;
+  const start=sliceStart(idx),dur=sliceLen(idx);
   const playFrac=Math.max(0.05,p.slicePct/100);
-  const len=Math.max(0.03,sliceDur*playFrac*T.lenK);
-  const useBuf=reverse?revBuffer:buffer;
-  const offset=reverse?Math.max(0,useBuf.duration-start-sliceDur):start;
-  const src=AC.createBufferSource();src.buffer=useBuf;src.loop=false;
+  const len=Math.max(0.03,dur*playFrac);
+  const src=AC.createBufferSource();src.buffer=buffer;src.loop=false;
   src.playbackRate.value=Math.pow(2,p.pitch/12);
   const env=AC.createGain();env.gain.value=0.0001;
   src.connect(env);env.connect(node.input);
-  shapeEnv(env.gain,T,time,len,T.gain);
+  shapeHitEnv(env.gain,time,len,T.gain);
   const send=AC.createGain();send.gain.value=T.send*p.fb*globalFb*1.2;
   env.connect(send);send.connect(echoDelay);
-  src.start(time,Math.max(0,offset),len+0.06);
+  src.start(time,Math.max(0,start),len+0.06);
   markSliceFlash(idx,T.col);
   const kill=(len+0.25)*1000+Math.max(0,(time-AC.currentTime)*1000);
   setTimeout(()=>{try{src.disconnect();}catch(e){}try{env.disconnect();}catch(e){}try{send.disconnect();}catch(e){}},kill);
@@ -766,7 +770,7 @@ function triggerSlice(r,c,tile,time){
 /* ---------- scheduler (look-ahead, byte-identical pattern to wfc_multitap.html) ---------- */
 let curStep=0,nextStepTime=0,schedTimer=null,uiEvents=[],playCol=-1;
 function scheduleStep(c,time){
-  for(let r=0;r<LANES;r++){const t=grid[IDX(r,c)];if(t===undefined||t<=0)continue;triggerSlice(r,c,t,time);}
+  for(let r=0;r<LANES;r++){const t=grid[IDX(r,c)];if(t===undefined||t<=0)continue;triggerPad(r,c,t,time);}
 }
 function scheduler(){
   if(!AC)return;const ahead=0.12;
@@ -803,7 +807,7 @@ function drawSourceTransport(){
     sc.fillStyle='rgba(255,42,42,0.95)';sc.font='700 11px ui-monospace,monospace';sc.fillText((frac*buffer.duration).toFixed(2)+' / '+buffer.duration.toFixed(2)+' S',12,18);}
 }
 function useBuffer(buf,label){
-  buffer=buf;revBuffer=makeReversed(buf);
+  buffer=buf;
   recomputeSlices();
   document.getElementById('srcname').textContent=label+' · '+buf.duration.toFixed(1)+'s';
   drawSourceWave();
@@ -830,7 +834,10 @@ function effGain(i){const p=lanes[i];if(!p||p.mute)return 0;if(anySolo()&&!p.sol
 function applyMix(){
   if(!AC)return;const wet=(+wetEl.value)/100;globalFb=(+fbEl.value)/100;
   if(bypassed){dryGain.gain.setTargetAtTime(1,AC.currentTime,0.03);wetGain.gain.setTargetAtTime(0,AC.currentTime,0.03);}
-  else{dryGain.gain.setTargetAtTime(1-wet*0.8,AC.currentTime,0.02);wetGain.gain.setTargetAtTime(0.95*wet,AC.currentTime,0.02);}
+  // A true crossfade: at Wet=100 the looping dry sample is fully silent, not
+  // just attenuated — the old 1-wet*0.8 floor always left ~20% of the raw
+  // loop audible underneath even at full wet, which read as a leak/bug.
+  else{dryGain.gain.setTargetAtTime(1-wet,AC.currentTime,0.02);wetGain.gain.setTargetAtTime(wet,AC.currentTime,0.02);}
   echoDelay.delayTime.setTargetAtTime(echoTime(),AC.currentTime,0.05);echoFb.gain.setTargetAtTime(globalFb*0.9,AC.currentTime,0.03);
   laneNodes.forEach((n,i)=>{if(!n)return;n.vol.gain.setTargetAtTime(effGain(i),AC.currentTime,fadeTC());});
 }
@@ -864,7 +871,7 @@ function buildEditor(){
   if(selLane==null||!lanes[selLane]){body.innerHTML='<div class="edhint">Click a strip above (or right-click a lane on the map) to edit that lane’s voice and add insert effects.</div>';return;}
   const i=selLane,p=lanes[i];body.innerHTML='';
   const head=document.createElement('div');head.style.cssText='display:flex;align-items:center;gap:10px;margin-bottom:8px;font-weight:700;text-transform:uppercase;letter-spacing:.06em';
-  head.innerHTML='<span class="chdot" style="background:'+siteColors[i]+'"></span>Lane '+i+' <span style="color:var(--mut);font-weight:400">'+(p.pitch>0?'+':'')+p.pitch+' st · slice '+(laneCursor[i]||0)+'/'+SLICES+'</span>';body.appendChild(head);
+  head.innerHTML='<span class="chdot" style="background:'+siteColors[i]+'"></span>Lane '+i+' <span style="color:var(--mut);font-weight:400">'+(p.pitch>0?'+':'')+p.pitch+' st</span>';body.appendChild(head);
   const grid2=document.createElement('div');grid2.className='edgrid';body.appendChild(grid2);
   const col1=document.createElement('div');col1.className='edcol';grid2.appendChild(col1);
   col1.appendChild(edRow('Pitch',-24,24,1,p.pitch,v=>(v>0?'+':'')+v+' st',v=>{p.pitch=v;buildEditor();}));
@@ -945,14 +952,12 @@ function draw(){
         let lit=0.86;
         if(playing&&playCol===c){lit=1;}
         ctx2d.fillStyle=T.col;ctx2d.globalAlpha=lit;ctx2d.fillRect(x+2,y+2,cw-4,chh-4);ctx2d.globalAlpha=1;
-        ctx2d.strokeStyle='rgba(0,0,0,0.35)';ctx2d.lineWidth=1.5;ctx2d.beginPath();
-        const yb=y+chh-4,ya=y+4,xa=x+4,xb=x+cw-4;
-        if(t===T_FWD){ctx2d.moveTo(xa,yb);ctx2d.lineTo(xb,ya);}
-        else if(t===T_BACK){ctx2d.moveTo(xa,ya);ctx2d.lineTo(xb,yb);}
-        else if(t===T_HOLD){ctx2d.moveTo(xa,y+chh/2);ctx2d.lineTo(xb,y+chh/2);}
-        else if(t===T_LEAP){ctx2d.moveTo((xa+xb)/2,yb);ctx2d.lineTo((xa+xb)/2,ya);}
-        else if(t===T_FLIP){ctx2d.moveTo(xa,y+chh/2);ctx2d.lineTo(xb,y+chh/2);ctx2d.moveTo((xa+xb)/2,ya);ctx2d.lineTo((xa+xb)/2,yb);}
-        ctx2d.stroke();
+        // The cell shows the pad NUMBER, not a move glyph — the tile is the
+        // literal sound now, so the number is what tells you what plays.
+        ctx2d.fillStyle='rgba(0,0,0,0.55)';ctx2d.font='700 '+Math.min(13,chh*0.42)+'px ui-monospace,monospace';
+        ctx2d.textAlign='center';ctx2d.textBaseline='middle';
+        ctx2d.fillText(String(T.pad+1),x+cw/2,y+chh/2);
+        ctx2d.textBaseline='alphabetic';ctx2d.textAlign='left';
       }
       if(locked[i]){ctx2d.strokeStyle='rgba(255,255,255,0.85)';ctx2d.lineWidth=1;ctx2d.strokeRect(x+1.5,y+1.5,cw-3,chh-3);}
     }else{
@@ -972,7 +977,7 @@ function draw(){
   ctx2d.textAlign='left';
   if(playing&&playCol>=0){const px=padL+playCol*cw;ctx2d.strokeStyle='#ff2a2a';ctx2d.lineWidth=2;ctx2d.beginPath();ctx2d.moveTo(px,padT);ctx2d.lineTo(px,padT+gh);ctx2d.stroke();ctx2d.beginPath();ctx2d.moveTo(px+cw,padT);ctx2d.lineTo(px+cw,padT+gh);ctx2d.stroke();}
   ctx2d.fillStyle='rgba(150,150,150,0.7)';ctx2d.font='10px ui-monospace,monospace';
-  ctx2d.fillText(BPM+' BPM · '+DIVS[stepDivIdx].label+' · '+(solving?'COLLAPSING…':(rulesMode==='learned'?'LEARNED':'HAND')),padL,padT+gh+16);
+  ctx2d.fillText(BPM+' BPM · '+DIVS[stepDivIdx].label+' · '+(solving?'COLLAPSING…':(rulesMode==='learned'?'LEARNED':'SOURCE')),padL,padT+gh+16);
   if(AC){for(let i=0;i<lanes.length;i++){const L=Math.min(1,rms(laneNodes[i]&&laneNodes[i].an)*3.5);if(meterFills[i])meterFills[i].style.height=(L*100).toFixed(0)+'%';}
     document.getElementById('mmfill').style.width=(Math.min(1,rms(masterAn)*3.2)*100).toFixed(0)+'%';}
   drawSourceTransport();drawSliceMap();highlightChannels();
@@ -993,8 +998,8 @@ cv.addEventListener('contextmenu',e=>{e.preventDefault();const cell=evCell(e);if
 function updateRead(){const r=document.getElementById('read');if(!r)return;
   const filled=grid?grid.reduce((s,v)=>s+(v>=0?1:0),0):0,tot=LANES*COLS,lk=locked?locked.reduce((s,v)=>s+v,0):0;
   let hits=0;if(grid)for(const v of grid)if(v>0)hits++;
-  r.innerHTML='grid: <b>'+COLS+'×'+LANES+'</b> · '+(solving?'collapsing '+filled+'/'+tot:(solveDone?'solved':'blank'))+'<br>active taps: '+hits+' · locked: '+lk+' · transients: '+SLICES+(rulesMode==='learned'?'<br>learned: '+learnedInfo:'');}
-function setModeLine(){const e=document.getElementById('modev');if(e)e.textContent=(rulesMode==='learned'?'learned — '+(learnedInfo||''):'hand-written');}
+  r.innerHTML='grid: <b>'+COLS+'×'+LANES+'</b> · '+(solving?'collapsing '+filled+'/'+tot:(solveDone?'solved':'blank'))+'<br>active taps: '+hits+' · locked: '+lk+' · pads: '+PADS+' · transients: '+SLICES;}
+function setModeLine(){const e=document.getElementById('modev');if(e)e.textContent=(rulesMode==='learned'?'learned — '+(learnedInfo||''):(learnedInfo||'source order'));}
 
 /* ---------- presets ---------- */
 function getPreset(){return{v:1,app:'wfc-sampler',bpm:BPM,stepDiv:stepDivIdx,glide:glideMs,wet:+wetEl.value,fb:+fbEl.value,slicePct:+slicepctEl.value,
@@ -1014,11 +1019,13 @@ async function loadPreset(o){
   outpEl.value=Math.round(outputLevel*100);setv('outpv',outpEl.value);toneEl.value=toneHz;setv('tonev',toneHz>=1000?(toneHz/1000).toFixed(1)+'k':toneHz);widthEl.value=Math.round(widthAmt*100);setv('widthv',widthEl.value);
   [...timeseg.children].forEach(c=>c.classList.toggle('on',+c.dataset.t===delayMult));
   COLS=o.cols??16;LANES=o.lanes??6;sensitivity=o.sensitivity??55;colsEl.value=COLS;setv('colsv',COLS);lanesEl.value=LANES;setv('lanesv',LANES);sensEl.value=sensitivity;setv('sensv',sensitivity+'%');
-  if(o.rules&&o.rulesMode==='learned'){allowR=o.rules.allowR;allowL=o.rules.allowL;allowD=o.rules.allowD;allowU=o.rules.allowU;W_=o.rules.w;startMask=o.rules.startMask;rulesMode='learned';learnedInfo=o.learnedInfo||'';}
-  else useHandRules();
-  setModeLine();
   buildLanes(LANES);
-  recomputeSlices();
+  syncPadsToLanes();   // PADS follows LANES; rebuilds TILES + default rules + brush + slices for NT
+  // A learned ruleset only restores if it matches this NT — a preset saved
+  // at a different Lanes count had a different-sized tile alphabet.
+  if(o.rules&&o.rulesMode==='learned'&&Array.isArray(o.rules.allowR)&&o.rules.allowR.length===NT){
+    allowR=o.rules.allowR;allowL=o.rules.allowL;allowD=o.rules.allowD;allowU=o.rules.allowU;W_=o.rules.w;startMask=o.rules.startMask;rulesMode='learned';learnedInfo=o.learnedInfo||'';setModeLine();
+  }
   if(Array.isArray(o.laneParams))o.laneParams.forEach((lp,i)=>{if(lanes[i])Object.assign(lanes[i],{pitch:lp.pitch,cut:lp.cut,pan:lp.pan,fb:lp.fb,slicePct:lp.slicePct,vol:lp.vol,mute:!!lp.mute,solo:!!lp.solo,hue:lp.hue,fx:(lp.fx||[]).map(f=>({type:f.type,params:{...f.params}}))});siteColors[i]='hsl('+lanes[i].hue+',60%,62%)';});
   allocGrid();
   if(Array.isArray(o.gridTiles))for(let i=0;i<grid.length&&i<o.gridTiles.length;i++)grid[i]=o.gridTiles[i];
@@ -1051,7 +1058,7 @@ playBtn.addEventListener('click',async()=>{await ensureAudio();
     playing=false;playBtn.textContent='▶ Play';playBtn.classList.remove('on');}});
 collapseBtn.addEventListener('click',()=>{startCollapse();});
 reseedBtn.addEventListener('click',()=>{clearLocks();startCollapse();});
-regenBtn.addEventListener('click',()=>{COLS=+colsEl.value;LANES=+lanesEl.value;buildLanes(LANES);allocGrid();clearLocks();if(AC){buildLaneNodes();applyMix();}buildMixer();selLane=null;buildEditor();startCollapse();});
+regenBtn.addEventListener('click',()=>{COLS=+colsEl.value;LANES=+lanesEl.value;buildLanes(LANES);syncPadsToLanes();allocGrid();clearLocks();if(AC){buildLaneNodes();applyMix();}buildMixer();selLane=null;buildEditor();startCollapse();});
 
 bpmEl.addEventListener('input',()=>{BPM=+bpmEl.value;setv('bpmv',BPM);if(AC)applyMix();});
 stepdivEl.addEventListener('input',()=>{stepDivIdx=+stepdivEl.value;setv('stepdivv',DIVS[stepDivIdx].label);if(AC)applyMix();});
@@ -1063,12 +1070,11 @@ colsEl.addEventListener('input',()=>setv('colsv',colsEl.value));
 lanesEl.addEventListener('input',()=>setv('lanesv',lanesEl.value));
 sensEl.addEventListener('input',()=>{sensitivity=+sensEl.value;setv('sensv',sensitivity+'%');recomputeSlices();});
 colsEl.addEventListener('change',()=>{COLS=+colsEl.value;allocGrid();clearLocks();buildMixer();startCollapse();});
-lanesEl.addEventListener('change',()=>{LANES=+lanesEl.value;buildLanes(LANES);allocGrid();clearLocks();if(AC){buildLaneNodes();applyMix();}buildMixer();selLane=null;buildEditor();startCollapse();});
+lanesEl.addEventListener('change',()=>{LANES=+lanesEl.value;buildLanes(LANES);syncPadsToLanes();allocGrid();clearLocks();if(AC){buildLaneNodes();applyMix();}buildMixer();selLane=null;buildEditor();startCollapse();});
 
-document.getElementById('rHand').addEventListener('click',()=>{useHandRules();setActiveRuleBtn('rHand');});
-document.getElementById('rGrid').addEventListener('click',()=>{if(learnFromGrid({cols:COLS,lanes:LANES,tiles:grid}))setActiveRuleBtn('rGrid');});
-document.getElementById('rAudio').addEventListener('click',async()=>{await ensureAudio();learnFromAudio();setActiveRuleBtn('rAudio');});
-function setActiveRuleBtn(id){['rHand','rGrid','rAudio'].forEach(x=>document.getElementById(x).classList.toggle('on',x===id));}
+document.getElementById('rSource').addEventListener('click',()=>{buildDefaultRules();setActiveRuleBtn('rSource');});
+document.getElementById('rGrid').addEventListener('click',()=>{if(learnFromGrid({cols:COLS,lanes:LANES,tiles:grid},'grid'))setActiveRuleBtn('rGrid');});
+function setActiveRuleBtn(id){['rSource','rGrid'].forEach(x=>document.getElementById(x).classList.toggle('on',x===id));}
 document.getElementById('paint').addEventListener('click',function(){paintMode=!paintMode;this.classList.toggle('on',paintMode);cv.classList.toggle('paint',paintMode);});
 document.getElementById('erase').addEventListener('click',()=>{paintTile=T_SIL;paintMode=true;document.getElementById('paint').classList.add('on');cv.classList.add('paint');buildBrush();});
 document.getElementById('clr').addEventListener('click',()=>{clearGrid();});
@@ -1099,9 +1105,9 @@ document.getElementById('power').addEventListener('click',function(){bypassed=!b
 
 /* ---------- boot ---------- */
 sensitivity=+sensEl.value;
-useHandRules();buildBrush();
 COLS=+colsEl.value;LANES=+lanesEl.value;
-buildLanes(LANES);allocGrid();buildMixer();buildEditor();setModeLine();updateRead();
+buildLanes(LANES);syncPadsToLanes();
+allocGrid();buildMixer();buildEditor();setModeLine();updateRead();
 draw();drawSourceWave();
 startCollapse();                                   // crystallize once on load so the grid isn't blank
 
