@@ -45,6 +45,7 @@ that approximates the sonic direction. **Dry reference:** [`assets/audio/00_dry_
 🔊 [`assets/audio/02_wfc_multitap.wav`](assets/audio/02_wfc_multitap.wav)
 &nbsp;·&nbsp; ▶ **Live prototype:** [`prototypes/wfc_multitap.html`](prototypes/wfc_multitap.html) — real animated WFC solver, learn-from-example, grain + gated-multitap engines (write-up in the prototyping section below).
 &nbsp;·&nbsp; 📱 **Mobile prototype:** [`prototypes/wfc_chassis.html`](prototypes/wfc_chassis.html) — the same engine on the DLNY phone chassis, portrait-only.
+&nbsp;·&nbsp; 🔪 **Sample sequencer:** [`prototypes/wfc_sampler.html`](prototypes/wfc_sampler.html) — the same solver aimed at a loaded sample instead of a live signal (write-up below).
 
 - **Math:** Grid = time-steps × tap-lanes. "Tiles" = tap states (`rise`, `sustain`, `fall`,
   `accent`, `silent`, `feedback-junction`). **Adjacency constraints** enforce musical logic.
@@ -612,6 +613,52 @@ control-rate core** that drops into `js`/`node.script`, exactly as the README's 
 
 *Mixer strip (per lane)* — **Volume** fader (0–100), **Mute**, **Solo**; the meter + lane colour track the live signal.
 *Grid interactions* — **Paint** on + click/drag to draw tiles; **click a lane row** (or **right-click** it) selects it for the editor. **Device shell:** red **activator** = real bypass, **▾ fold** collapses the body.
+
+### ▶ Live interactive prototype — WFC Sampler (slice sequencer)
+
+**[`prototypes/wfc_sampler.html`](prototypes/wfc_sampler.html)** — open in any browser. A direct sibling
+of the WFC Multitap device above, built by asking a different question of the same solver: a multitap
+tile *shapes an envelope* around whatever audio happens to be arriving; what if the tile *addressed* a
+specific moment in a specific file instead? The grid, the solver, the mixer, the per-lane FX rack, the
+learn-from-example machinery and the device shell are unchanged. What a tile *means* is not.
+
+**The tile alphabet becomes cursor moves.** Each lane keeps its own position (a **slice-cursor**) into
+the loaded sample, which is cut into equal **Slices** (4–48, independent of the step grid). The six
+tiles are now `silent · fwd · hold · back · leap · flip`:
+- **Fwd / Back** step the cursor one slice forward or backward and play from there.
+- **Hold** replays the slice the cursor is already on — a stutter/repeat.
+- **Leap** jumps the cursor to a random slice — the accent, both loud and structurally surprising.
+- **Flip** plays the *current* slice reversed (and throws hard into the shared feedback line) without
+  moving the cursor — the one move that doesn't advance the read-head, just turns it around.
+
+Reverse playback is precomputed once per sample load (`makeReversed`): AudioBufferSourceNode has no
+negative playback rate, so a Flip is really "play forward through a time-reversed copy of the buffer, at
+the mirrored offset" — the standard trick, done once, not per note.
+
+**Same solver, better target.** Every adjacency rule, the paint-and-complete workflow, `Re-seed`, and
+**Learn ▸ grid** carry over verbatim — the horizontal/vertical constraints that made a multitap tap
+sequence feel composed (rest → push → settle → maybe jump or flip → decay back to rest) read exactly as
+well as a rule for walking a cursor through a sample. **Learn ▸ sample** replaces Learn ▸ audio: instead
+of analyzing whatever's arriving live, it reads the loaded file's own RMS envelope directly — there's no
+rolling capture buffer in this device at all, every trigger reads straight from the decoded sample (or
+its reverse), so the ScriptProcessor capture node the multitap engine needs is gone entirely.
+
+**Mini-scope doubles as a slice map.** The small waveform display doesn't show a captured grain (there
+isn't one); it shows the loaded sample with its slice boundaries marked, and each triggered slice
+flashes in the color of the tile that fired it — a second, sample-accurate view of what the grid is
+doing, live.
+
+**Everything else matches the WFC Multitap device**: per-lane mixer, lane editor (Pitch, Cutoff, Pan,
+Feedback, **Slice %** in place of Grain len/Tap div — how much of a slice plays before the envelope cuts
+it), the same modular FX rack, master limiter, global Output/Tone/Width/Time, Save/Load presets, and the
+dice. Ships with a short home-recorded sample as the default source (fetched from
+`assets/audio/08_wfc_sampler_source.wav`, trimmed from a longer original) — drop your own file on the
+Source strip; the more percussive and varied it is, the more there is to chop.
+
+> **Why this is the better home for WFC:** a multitap can only ever gate or shape audio that's already
+> arriving. A slicer can *reorder* — the grid isn't scheduling effects on a signal any more, it's
+> composing a new sequence out of a fixed set of addressable fragments, which is closer to what "mangle
+> this sample" actually means.
 
 ### Regenerate the assets
 
