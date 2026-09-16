@@ -151,7 +151,7 @@
       <h2>Grid</h2>
       <div class="row"><label>Steps</label><input id="cols" type="range" data-rnd="off" min="8" max="32" value="16"><span class="val" id="colsv">16</span></div>
       <div class="row"><label>Lanes</label><input id="lanes" type="range" data-rnd="off" min="3" max="8" value="6"><span class="val" id="lanesv">6</span></div>
-      <div class="row"><label>Slices</label><input id="slices" type="range" min="4" max="48" value="16"><span class="val" id="slicesv">16</span></div>
+      <div class="row"><label>Onset</label><input id="sens" type="range" min="0" max="100" value="55"><span class="val" id="sensv">55%</span></div>
       <canvas id="wave" width="248" height="44"></canvas>
 
       <h2>Mix</h2>
@@ -186,7 +186,7 @@
 
   <div id="chedit"><h2>Lane editor</h2><div id="edbody"><div class="edhint">Click a strip above (or right-click a lane on the map) to edit that lane's voice and add insert effects.</div></div></div>
 
-  <div class="hint"><b>Wave Function Collapse, as a sample slicer.</b> The grid still crystallizes the same way &mdash; hit <b>Collapse</b>, or <b>Paint</b> tiles and complete a pattern around them &mdash; but every tile now steers a <b>slice-cursor</b> through your loaded sample instead of shaping a grain of whatever's passing through live. <b>Fwd</b>/<b>Back</b> walk the cursor forward or backward one slice, <b>Hold</b> repeats the current slice (a stutter), <b>Leap</b> jumps it to a random slice (an accent), <b>Flip</b> plays the current slice reversed and throws it hard into the feedback line. <b>Learn ▸ sample</b> reads the loaded file's own envelope and re-weights the rules to match its dynamics. Drop your own file on the Source strip below &mdash; the more percussive and varied, the more there is to chop.</div>
+  <div class="hint"><b>Wave Function Collapse, as a sample slicer.</b> The grid still crystallizes the same way &mdash; hit <b>Collapse</b>, or <b>Paint</b> tiles and complete a pattern around them &mdash; but every tile now steers a <b>slice-cursor</b> through your loaded sample instead of shaping a grain of whatever's passing through live. The slices themselves aren't equal-width chops: they're cut at the sample's own <b>transients</b> (onset detection, tunable with <b>Onset</b>), so each one is a real event in the file &mdash; a hit, a syllable, a pluck. <b>Fwd</b>/<b>Back</b> walk the cursor forward or backward one transient, <b>Hold</b> repeats the current one (a stutter), <b>Leap</b> jumps it to a random one (an accent), <b>Flip</b> plays the current one reversed and throws it hard into the feedback line. <b>Learn ▸ sample</b> reads the loaded file's own envelope and re-weights the rules to match its dynamics. Drop your own file on the Source strip below &mdash; the more percussive and varied, the more there is to chop.</div>
   </div>
   </div>
 <script>
@@ -200,9 +200,10 @@
    there just shapes an envelope around noise that happens to be arriving.
 
    Here every tile instead moves a per-lane CURSOR across a fixed sample,
-   loaded once and sliced into equal regions. Fwd/Back walk the cursor;
-   Hold repeats where it is; Leap throws it somewhere new; Flip plays the
-   slice it's already on backwards. The grid stops being a rhythm applied TO
+   loaded once and sliced at its own transients (onset detection, not equal
+   chops — see detectTransients below). Fwd/Back walk the cursor; Hold
+   repeats where it is; Leap throws it somewhere new; Flip plays the slice
+   it's already on backwards. The grid stops being a rhythm applied TO
    audio and becomes a rhythm that CUTS UP a specific audio file — the same
    solver, aimed at a much better target for "sample mangling".
 
@@ -389,6 +390,49 @@ function buildLanes(n){
     siteColors.push('hsl('+hue+',60%,62%)');
     laneCursor.push(Math.floor(i*SLICES/n)%Math.max(1,SLICES));
   }
+}
+
+/* ---------- transient detection: slice boundaries = onsets, not equal chops ----
+   The grid still decides how to PROCEED across the slices (that's the solver,
+   unchanged below); this decides what a slice IS. A cheap onset-detection
+   function: pre-emphasis (first-order difference) so a transient's broadband
+   attack stands out over whatever tone preceded it, frame energy over that,
+   then peak-pick the positive-going jumps in energy (a simplified spectral-
+   flux) above a sensitivity-scaled threshold, with a 60ms refractory period
+   so one hit doesn't register twice. `sliceBounds` is the resulting list of
+   cut points in seconds, always starting at 0 and ending at buf.duration. */
+function detectTransients(buf,sensitivity){
+  const d=buf.getChannelData(0),n0=d.length,sr=buf.sampleRate;
+  const hop=512,win=1024,frames=Math.max(0,Math.floor((n0-win)/hop));
+  if(frames<2)return [0,buf.duration];
+  const energy=new Float32Array(frames);
+  for(let i=0;i<frames;i++){
+    let s=0;const off=i*hop;let prev=off>0?d[off-1]:0;
+    for(let j=0;j<win;j++){const cur=d[off+j]||0,e=cur-0.95*prev;prev=cur;s+=e*e;}
+    energy[i]=Math.sqrt(s/win);
+  }
+  const flux=new Float32Array(frames);let mx=1e-6;
+  for(let i=1;i<frames;i++){flux[i]=Math.max(0,energy[i]-energy[i-1]);if(flux[i]>mx)mx=flux[i];}
+  for(let i=0;i<frames;i++)flux[i]/=mx;
+  const amt=Math.max(0,Math.min(100,sensitivity))/100;
+  const thresh=0.5-amt*0.44;                          // more sensitive -> lower bar -> more onsets
+  const minGap=Math.max(1,Math.round((sr*0.06)/hop));  // 60ms refractory
+  const bounds=[0];let last=-minGap;
+  for(let i=1;i<frames-1;i++){
+    if(flux[i]>thresh&&flux[i]>=flux[i-1]&&flux[i]>=flux[i+1]&&i-last>=minGap){bounds.push(i*hop/sr);last=i;}
+  }
+  bounds.push(buf.duration);
+  return bounds;
+}
+let sliceBounds=[0,1],sensitivity=55;
+function sliceStart(i){return sliceBounds[i]||0;}
+function sliceLen(i){const hi=sliceBounds[i+1]!=null?sliceBounds[i+1]:sliceBounds[sliceBounds.length-1];return Math.max(0.02,hi-sliceStart(i));}
+function recomputeSlices(){
+  sliceBounds=buffer?detectTransients(buffer,sensitivity):[0,1];
+  SLICES=Math.max(1,sliceBounds.length-1);
+  const n=Math.max(1,laneCursor.length);
+  laneCursor=laneCursor.map((c,i)=>Math.floor(i*SLICES/n)%SLICES);
+  updateRead();
 }
 
 /* ---------- FX factory (modular inserts; same shape the Max port uses) ---------- */
@@ -701,10 +745,9 @@ function triggerSlice(r,c,tile,time){
   // hold and flip stay on the slice the cursor is already at
   laneCursor[r]=idx;
   const reverse=tile===T_FLIP;
-  const sliceDur=buffer.duration/SLICES;
+  const start=sliceStart(idx),sliceDur=sliceLen(idx);
   const playFrac=Math.max(0.05,p.slicePct/100);
   const len=Math.max(0.03,sliceDur*playFrac*T.lenK);
-  const start=idx*sliceDur;
   const useBuf=reverse?revBuffer:buffer;
   const offset=reverse?Math.max(0,useBuf.duration-start-sliceDur):start;
   const src=AC.createBufferSource();src.buffer=useBuf;src.loop=false;
@@ -761,6 +804,7 @@ function drawSourceTransport(){
 }
 function useBuffer(buf,label){
   buffer=buf;revBuffer=makeReversed(buf);
+  recomputeSlices();
   document.getElementById('srcname').textContent=label+' · '+buf.duration.toFixed(1)+'s';
   drawSourceWave();
   if(playing)restartSource();
@@ -858,17 +902,17 @@ function drawSliceMap(){
   wctx.clearRect(0,0,waveCv.width,waveCv.height);
   if(!buffer)return;
   const d=buffer.getChannelData(0),Wd=waveCv.width,Hd=waveCv.height,mid=Hd/2,step=Math.max(1,Math.floor(d.length/Wd));
-  const now=performance.now();
+  const now=performance.now(),dur=buffer.duration||1;
   for(let s=0;s<SLICES;s++){
     const f=sliceFlash[s];if(!f||now-f.t>=220)continue;
-    const a=1-(now-f.t)/220,x0=Math.round(s/SLICES*Wd),x1=Math.round((s+1)/SLICES*Wd);
+    const a=1-(now-f.t)/220,x0=Math.round(sliceStart(s)/dur*Wd),x1=Math.round((sliceStart(s)+sliceLen(s))/dur*Wd);
     wctx.globalAlpha=a*0.55;wctx.fillStyle=f.col;wctx.fillRect(x0,0,Math.max(1,x1-x0),Hd);wctx.globalAlpha=1;
   }
   wctx.strokeStyle='#c86bfa';wctx.lineWidth=1;wctx.beginPath();
   for(let x=0;x<Wd;x++){let mx=0;for(let j=0;j<step;j++){const v=Math.abs(d[x*step+j]||0);if(v>mx)mx=v;}wctx.moveTo(x,mid-mx*mid*0.95);wctx.lineTo(x,mid+mx*mid*0.95);}
   wctx.stroke();
   wctx.strokeStyle='rgba(255,255,255,0.14)';wctx.beginPath();
-  for(let s=1;s<SLICES;s++){const x=Math.round(s/SLICES*Wd)+0.5;wctx.moveTo(x,0);wctx.lineTo(x,Hd);}
+  for(let s=1;s<SLICES;s++){const x=Math.round(sliceBounds[s]/dur*Wd)+0.5;wctx.moveTo(x,0);wctx.lineTo(x,Hd);}
   wctx.stroke();
 }
 function rms(an){if(!an)return 0;an.getFloatTimeDomainData(tmpBuf);let s=0;for(let j=0;j<tmpBuf.length;j++)s+=tmpBuf[j]*tmpBuf[j];return Math.sqrt(s/tmpBuf.length);}
@@ -949,12 +993,12 @@ cv.addEventListener('contextmenu',e=>{e.preventDefault();const cell=evCell(e);if
 function updateRead(){const r=document.getElementById('read');if(!r)return;
   const filled=grid?grid.reduce((s,v)=>s+(v>=0?1:0),0):0,tot=LANES*COLS,lk=locked?locked.reduce((s,v)=>s+v,0):0;
   let hits=0;if(grid)for(const v of grid)if(v>0)hits++;
-  r.innerHTML='grid: <b>'+COLS+'×'+LANES+'</b> · '+(solving?'collapsing '+filled+'/'+tot:(solveDone?'solved':'blank'))+'<br>active taps: '+hits+' · locked: '+lk+' · slices: '+SLICES+(rulesMode==='learned'?'<br>learned: '+learnedInfo:'');}
+  r.innerHTML='grid: <b>'+COLS+'×'+LANES+'</b> · '+(solving?'collapsing '+filled+'/'+tot:(solveDone?'solved':'blank'))+'<br>active taps: '+hits+' · locked: '+lk+' · transients: '+SLICES+(rulesMode==='learned'?'<br>learned: '+learnedInfo:'');}
 function setModeLine(){const e=document.getElementById('modev');if(e)e.textContent=(rulesMode==='learned'?'learned — '+(learnedInfo||''):'hand-written');}
 
 /* ---------- presets ---------- */
 function getPreset(){return{v:1,app:'wfc-sampler',bpm:BPM,stepDiv:stepDivIdx,glide:glideMs,wet:+wetEl.value,fb:+fbEl.value,slicePct:+slicepctEl.value,
-  output:outputLevel,tone:toneHz,width:widthAmt,time:delayMult,cols:COLS,lanes:LANES,slices:SLICES,rulesMode,learnedInfo,
+  output:outputLevel,tone:toneHz,width:widthAmt,time:delayMult,cols:COLS,lanes:LANES,sensitivity,rulesMode,learnedInfo,
   rules:{allowR,allowL,allowD,allowU,w:W_,startMask},
   gridTiles:Array.from(grid),locks:Array.from(locked),
   laneParams:lanes.map(p=>({pitch:p.pitch,cut:p.cut,pan:+p.pan.toFixed(3),fb:+p.fb.toFixed(3),slicePct:p.slicePct,vol:+p.vol.toFixed(3),mute:p.mute,solo:p.solo,hue:p.hue,fx:p.fx.map(f=>({type:f.type,params:{...f.params}}))}))};}
@@ -969,11 +1013,12 @@ async function loadPreset(o){
   outputLevel=o.output??1;toneHz=o.tone??18000;widthAmt=o.width??1;delayMult=o.time??1;
   outpEl.value=Math.round(outputLevel*100);setv('outpv',outpEl.value);toneEl.value=toneHz;setv('tonev',toneHz>=1000?(toneHz/1000).toFixed(1)+'k':toneHz);widthEl.value=Math.round(widthAmt*100);setv('widthv',widthEl.value);
   [...timeseg.children].forEach(c=>c.classList.toggle('on',+c.dataset.t===delayMult));
-  COLS=o.cols??16;LANES=o.lanes??6;SLICES=o.slices??16;colsEl.value=COLS;setv('colsv',COLS);lanesEl.value=LANES;setv('lanesv',LANES);slicesEl.value=SLICES;setv('slicesv',SLICES);
+  COLS=o.cols??16;LANES=o.lanes??6;sensitivity=o.sensitivity??55;colsEl.value=COLS;setv('colsv',COLS);lanesEl.value=LANES;setv('lanesv',LANES);sensEl.value=sensitivity;setv('sensv',sensitivity+'%');
   if(o.rules&&o.rulesMode==='learned'){allowR=o.rules.allowR;allowL=o.rules.allowL;allowD=o.rules.allowD;allowU=o.rules.allowU;W_=o.rules.w;startMask=o.rules.startMask;rulesMode='learned';learnedInfo=o.learnedInfo||'';}
   else useHandRules();
   setModeLine();
   buildLanes(LANES);
+  recomputeSlices();
   if(Array.isArray(o.laneParams))o.laneParams.forEach((lp,i)=>{if(lanes[i])Object.assign(lanes[i],{pitch:lp.pitch,cut:lp.cut,pan:lp.pan,fb:lp.fb,slicePct:lp.slicePct,vol:lp.vol,mute:!!lp.mute,solo:!!lp.solo,hue:lp.hue,fx:(lp.fx||[]).map(f=>({type:f.type,params:{...f.params}}))});siteColors[i]='hsl('+lanes[i].hue+',60%,62%)';});
   allocGrid();
   if(Array.isArray(o.gridTiles))for(let i=0;i<grid.length&&i<o.gridTiles.length;i++)grid[i]=o.gridTiles[i];
@@ -987,7 +1032,7 @@ async function loadPreset(o){
 const playBtn=document.getElementById('play'),collapseBtn=document.getElementById('collapse'),reseedBtn=document.getElementById('reseed'),regenBtn=document.getElementById('regen');
 const bpmEl=document.getElementById('bpm'),stepdivEl=document.getElementById('stepdiv');
 const wetEl=document.getElementById('wet'),fbEl=document.getElementById('fb'),slicepctEl=document.getElementById('slicepct'),glideEl=document.getElementById('glide');
-const colsEl=document.getElementById('cols'),lanesEl=document.getElementById('lanes'),slicesEl=document.getElementById('slices');
+const colsEl=document.getElementById('cols'),lanesEl=document.getElementById('lanes'),sensEl=document.getElementById('sens');
 const outpEl=document.getElementById('outp'),toneEl=document.getElementById('tone'),widthEl=document.getElementById('width'),timeseg=document.getElementById('timeseg');
 const setv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
 
@@ -1016,7 +1061,7 @@ fbEl.addEventListener('input',()=>{setv('fbv',fbEl.value);applyMix();});
 slicepctEl.addEventListener('input',()=>{setv('slicepctv',slicepctEl.value);lanes.forEach(p=>p.slicePct=+slicepctEl.value);if(selLane!=null)buildEditor();});
 colsEl.addEventListener('input',()=>setv('colsv',colsEl.value));
 lanesEl.addEventListener('input',()=>setv('lanesv',lanesEl.value));
-slicesEl.addEventListener('input',()=>{setv('slicesv',slicesEl.value);SLICES=+slicesEl.value;laneCursor=laneCursor.map(c=>(c||0)%SLICES);updateRead();});
+sensEl.addEventListener('input',()=>{sensitivity=+sensEl.value;setv('sensv',sensitivity+'%');recomputeSlices();});
 colsEl.addEventListener('change',()=>{COLS=+colsEl.value;allocGrid();clearLocks();buildMixer();startCollapse();});
 lanesEl.addEventListener('change',()=>{LANES=+lanesEl.value;buildLanes(LANES);allocGrid();clearLocks();if(AC){buildLaneNodes();applyMix();}buildMixer();selLane=null;buildEditor();startCollapse();});
 
@@ -1053,7 +1098,7 @@ document.getElementById('fold').addEventListener('click',function(){const f=docu
 document.getElementById('power').addEventListener('click',function(){bypassed=!bypassed;this.classList.toggle('on',!bypassed);document.getElementById('device').classList.toggle('off',bypassed);applyMix();});
 
 /* ---------- boot ---------- */
-SLICES=+slicesEl.value;
+sensitivity=+sensEl.value;
 useHandRules();buildBrush();
 COLS=+colsEl.value;LANES=+lanesEl.value;
 buildLanes(LANES);allocGrid();buildMixer();buildEditor();setModeLine();updateRead();

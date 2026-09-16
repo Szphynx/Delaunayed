@@ -622,10 +622,17 @@ tile *shapes an envelope* around whatever audio happens to be arriving; what if 
 specific moment in a specific file instead? The grid, the solver, the mixer, the per-lane FX rack, the
 learn-from-example machinery and the device shell are unchanged. What a tile *means* is not.
 
+**The slices are the sample's own transients, not equal chops.** A cheap onset detector
+(`detectTransients` — pre-emphasis, frame energy, peak-pick the positive jumps above a threshold, 60ms
+refractory) cuts the loaded file wherever it actually has an event: a hit, a syllable, a pluck. The
+**Onset** knob is the detector's sensitivity, not a slice count — turn it up and quiet or gradual
+onsets start registering too, so there are more (smaller) slices; turn it down and only the sharpest
+transients survive, so there are fewer (larger) ones. The resulting slice count is read off live (it's
+in the readout and in the lane editor), and it's independent of the step grid.
+
 **The tile alphabet becomes cursor moves.** Each lane keeps its own position (a **slice-cursor**) into
-the loaded sample, which is cut into equal **Slices** (4–48, independent of the step grid). The six
-tiles are now `silent · fwd · hold · back · leap · flip`:
-- **Fwd / Back** step the cursor one slice forward or backward and play from there.
+that list of transients. The six tiles are now `silent · fwd · hold · back · leap · flip`:
+- **Fwd / Back** step the cursor one transient forward or backward and play from there.
 - **Hold** replays the slice the cursor is already on — a stutter/repeat.
 - **Leap** jumps the cursor to a random slice — the accent, both loud and structurally surprising.
 - **Flip** plays the *current* slice reversed (and throws hard into the shared feedback line) without
