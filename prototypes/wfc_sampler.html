@@ -36,6 +36,19 @@
   canvas#cv{background:#0b0e15;border:1px solid #2e2e2e;touch-action:none;cursor:crosshair;max-width:100%;height:auto}
   canvas#cv.paint{cursor:cell}
   .panel{background:var(--panel);border:1px solid #2e2e2e;padding:16px 18px;width:286px}
+  /* everything that acts directly ON the grid lives right above it, not in
+     the side panel — brush, tile palette, grid shape and onset detection are
+     all things you reach for mid-paint, so the distance to them matters. */
+  .cvcol{display:flex;flex-direction:column;gap:8px;max-width:720px}
+  .gridbar{display:flex;flex-wrap:wrap;gap:8px 22px;align-items:flex-start;background:var(--panel);
+           border:1px solid #2e2e2e;padding:11px 14px}
+  .gridbar .grp{display:flex;flex-direction:column;gap:7px}
+  .gridbar .glbl{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:var(--mut)}
+  .gridbar .mini{display:flex;align-items:center;gap:7px;font-size:11px}
+  .gridbar .mini label{flex:0 0 44px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-size:10px}
+  .gridbar .mini input[type=range]{width:92px;accent-color:var(--ink)}
+  .gridbar .mini .val{flex:0 0 38px;text-align:right;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .gridbar canvas#wave{margin-top:0}
   h2{font-size:11px;text-transform:uppercase;letter-spacing:.24em;color:var(--mut);font-weight:700;
      margin:20px 0 10px;border-bottom:1px solid #232323;padding-bottom:9px}
   h2:first-child{margin-top:0}
@@ -132,7 +145,29 @@
    </div>
    <div class="devbody" id="devbody">
   <div class="wrap">
-    <canvas id="cv" width="720" height="500"></canvas>
+    <div class="cvcol">
+      <div class="gridbar">
+        <div class="grp">
+          <span class="glbl">Brush</span>
+          <span class="seg"><button id="paint">Paint</button><button id="erase">Rest</button><button id="clr">Clear</button></span>
+        </div>
+        <div class="grp">
+          <span class="glbl">Tiles</span>
+          <div class="tiles" id="brush"></div>
+        </div>
+        <div class="grp">
+          <span class="glbl">Grid</span>
+          <div class="mini"><label>Steps</label><input id="cols" type="range" data-rnd="off" min="8" max="32" value="16"><span class="val" id="colsv">16</span></div>
+          <div class="mini"><label>Lanes</label><input id="lanes" type="range" data-rnd="off" min="3" max="8" value="6"><span class="val" id="lanesv">6</span></div>
+          <div class="mini"><label>Onset</label><input id="sens" type="range" min="0" max="100" value="55"><span class="val" id="sensv">55%</span></div>
+        </div>
+        <div class="grp">
+          <span class="glbl">Slice map</span>
+          <canvas id="wave" width="248" height="44"></canvas>
+        </div>
+      </div>
+      <canvas id="cv" width="720" height="500"></canvas>
+    </div>
     <div class="panel">
       <h2>Transport</h2>
       <div class="btns"><button id="play">▶ Play</button><button id="collapse">⟐ Collapse</button><button id="reseed">↻ Re-seed</button></div>
@@ -144,21 +179,14 @@
       <h2>Rules · learn</h2>
       <div class="modeline">rules: <b id="modev">source order</b></div>
       <div class="btns"><button id="rSource" class="on">Source order</button><button id="rGrid">Learn ▸ grid</button></div>
-      <div class="row" style="margin-top:10px"><label>Brush</label>
-        <span class="seg" style="flex:1"><button id="paint">Paint</button><button id="erase">Rest</button><button id="clr">Clear</button></span></div>
-      <div class="tiles" id="brush"></div>
-
-      <h2>Grid</h2>
-      <div class="row"><label>Steps</label><input id="cols" type="range" data-rnd="off" min="8" max="32" value="16"><span class="val" id="colsv">16</span></div>
-      <div class="row"><label>Lanes</label><input id="lanes" type="range" data-rnd="off" min="3" max="8" value="6"><span class="val" id="lanesv">6</span></div>
-      <div class="row"><label>Onset</label><input id="sens" type="range" min="0" max="100" value="55"><span class="val" id="sensv">55%</span></div>
-      <canvas id="wave" width="248" height="44"></canvas>
 
       <h2>Mix</h2>
       <div class="row"><label>Glide</label><input id="glide" type="range" min="0" max="800" value="60"><span class="val" id="glidev">60</span></div>
       <div class="row"><label>Dry/Wet</label><input id="wet" type="range" min="0" max="100" value="78"><span class="val" id="wetv">78</span></div>
       <div class="row"><label>Feedback</label><input id="fb" type="range" min="0" max="90" value="34"><span class="val" id="fbv">34</span></div>
       <div class="row"><label>Slice %</label><input id="slicepct" type="range" min="10" max="100" value="70"><span class="val" id="slicepctv">70</span></div>
+      <div class="row"><label>Attack</label><input id="atk" type="range" min="0" max="150" value="3"><span class="val" id="atkv">3ms</span></div>
+      <div class="row"><label>Release</label><input id="rel" type="range" min="2" max="400" value="40"><span class="val" id="relv">40ms</span></div>
 
       <h2>Output</h2>
       <div class="row"><label>Output</label><input id="outp" type="range" min="0" max="150" value="100"><span class="val" id="outpv">100</span></div>
@@ -186,7 +214,7 @@
 
   <div id="chedit"><h2>Lane editor</h2><div id="edbody"><div class="edhint">Click a strip above (or right-click a lane on the map) to edit that lane's voice and add insert effects.</div></div></div>
 
-  <div class="hint"><b>Wave Function Collapse, as a sample slicer.</b> A tile IS a piece of your sample now &mdash; not a move, a move was the old idea. The file is cut into as many pieces as you have <b>Lanes</b> (one pad per channel); <b>Onset</b> tunes how the detector finds those cut points &mdash; picking the sample's biggest transients when it finds more than it needs, subdividing evenly when it finds fewer. Paint a pad onto the grid and that exact chunk plays there, every time. Hit <b>Collapse</b>, or <b>Paint</b> a partial pattern and complete around it; <b>Source order</b> (the default) biases new patterns toward how the pads actually followed each other in the recording, with a rest able to reopen the whole palette at any point &mdash; <b>Learn ▸ grid</b> re-derives the rules from whatever's on the grid instead. Drop your own file on the Source strip below &mdash; the more percussive and varied, the more there is to chop.</div>
+  <div class="hint"><b>Wave Function Collapse, as a sample slicer.</b> A tile IS a piece of your sample now &mdash; not a move, a move was the old idea. Everything that acts on the grid directly &mdash; brush, tile palette, Steps/Lanes/Onset and the slice map &mdash; lives in the bar right above it. The file is cut into as many pieces as you have <b>Lanes</b> (one pad per channel); <b>Onset</b> tunes the detector's sensitivity &mdash; the pad count stays fixed to Lanes, but drag it and watch the thin candidate lines in the slice map thin out or fill in, and the bright chosen ones shift: fewer/weaker candidates and it subdivides evenly, more and it keeps the biggest. Paint a pad onto the grid and that exact chunk plays there, every time, shaped by the <b>Attack/Release</b> envelope in Mix. Hit <b>Collapse</b>, or paint a partial pattern and complete around it; <b>Source order</b> (the default, in the side panel) biases new patterns toward how the pads actually followed each other in the recording, with a rest able to reopen the whole palette at any point &mdash; <b>Learn ▸ grid</b> re-derives the rules from whatever's on the grid instead. Drop your own file on the Source strip below &mdash; the more percussive and varied, the more there is to chop.</div>
   </div>
   </div>
 <script>
@@ -446,13 +474,19 @@ function choosePadBounds(onsets,duration,want){
   }
   return out;
 }
-let sliceBounds=[0,1],sensitivity=55;
+let sliceBounds=[0,1],sensitivity=55,rawOnsets=[];
 function sliceStart(i){return sliceBounds[i]||0;}
 function sliceLen(i){const hi=sliceBounds[i+1]!=null?sliceBounds[i+1]:sliceBounds[sliceBounds.length-1];return Math.max(0.02,hi-sliceStart(i));}
+/* PADS is fixed to the lane count, so the SLICE COUNT never visibly moves
+   when Onset changes — that used to be the only feedback Onset gave, so it
+   looked broken. `rawOnsets` (all raw candidates, kept around) and the two-
+   tier drawing in drawSliceMap are what show it's still doing something:
+   more/fewer/different candidate cut points, which shifts which ones win
+   the fixed PADS slots. */
 function recomputeSlices(){
-  const onsets=buffer?detectTransients(buffer,sensitivity):[];
+  rawOnsets=buffer?detectTransients(buffer,sensitivity):[];
   const dur=buffer?buffer.duration:1;
-  sliceBounds=choosePadBounds(onsets,dur,PADS);
+  sliceBounds=choosePadBounds(rawOnsets,dur,PADS);
   SLICES=sliceBounds.length-1;
   updateRead();
 }
@@ -495,6 +529,7 @@ function buildFxChain(p){
 let AC=null,buffer=null,srcNode=null,playing=false;
 let masterIn,dryGain,wetGain,fxColor,masterBus,limiter,masterAn,outGain,echoDelay,echoFb;
 let BPM=132,stepDivIdx=0,glideMs=60,outputLevel=1,toneHz=18000,widthAmt=1,delayMult=1,globalFb=0.34;
+let attackMs=3,releaseMs=40;
 let SLICES=16;
 let laneNodes=[],meterFills=[]; const tmpBuf=new Float32Array(256);
 let selLane=null,srcStart=0,srcWaveOff=null,bypassed=false;
@@ -729,17 +764,19 @@ function disposeLaneNode(i){const n=laneNodes[i];if(!n)return;['filt','vol','an'
 function buildLaneNodes(){laneNodes.forEach((_,i)=>disposeLaneNode(i));laneNodes=[];for(let i=0;i<lanes.length;i++)buildLaneNode(i);}
 
 /* ---------- envelope shaping ----------
-   Only one shape now: a click-safe fade in, then the pad's own natural decay
-   (already baked into the recording — it's a real transient, not a synthetic
-   contour), trimmed and faded out at whatever length Slice % allows. The old
-   rise/sustain/fall/accent contours don't apply once a tile IS the sound
-   rather than a shape imposed on one. */
-function shapeHitEnv(g,t,len,base){
-  const eps=0.0006;
+   A plain user-controllable Attack/Release trapezoid: ramp up over Attack,
+   hold flat at the tile's own gain (the pad's natural decay is already baked
+   into the recording — it's a real transient, not a synthetic contour to
+   re-shape), ramp down over Release. Both clamp to fit inside whatever
+   length Slice % actually leaves for this note, attack first, so a short
+   slice never tries to fit more envelope than it has room for. */
+function shapeHitEnv(g,t,len,base,atkMs,relMs){
+  const a=Math.min(Math.max(0.001,(atkMs||0)/1000),len*0.9);
+  const r=Math.min(Math.max(0.002,(relMs||0)/1000),len-a);
   if(g.cancelAndHoldAtTime)g.cancelAndHoldAtTime(t);else{g.cancelScheduledValues(t);g.setValueAtTime(g.value,t);}
-  g.linearRampToValueAtTime(0.0001,t+0.003);
-  g.linearRampToValueAtTime(base,t+0.006);
-  g.exponentialRampToValueAtTime(Math.max(eps,base*0.03),t+Math.max(0.03,len*0.9));
+  g.setValueAtTime(0.0001,t);
+  g.linearRampToValueAtTime(base,t+a);
+  g.setValueAtTime(base,Math.max(t+a,t+len-r));
   g.linearRampToValueAtTime(0.0001,t+len);
 }
 
@@ -758,7 +795,7 @@ function triggerPad(r,c,tile,time){
   src.playbackRate.value=Math.pow(2,p.pitch/12);
   const env=AC.createGain();env.gain.value=0.0001;
   src.connect(env);env.connect(node.input);
-  shapeHitEnv(env.gain,time,len,T.gain);
+  shapeHitEnv(env.gain,time,len,T.gain,attackMs,releaseMs);
   const send=AC.createGain();send.gain.value=T.send*p.fb*globalFb*1.2;
   env.connect(send);send.connect(echoDelay);
   src.start(time,Math.max(0,start),len+0.06);
@@ -918,7 +955,14 @@ function drawSliceMap(){
   wctx.strokeStyle='#c86bfa';wctx.lineWidth=1;wctx.beginPath();
   for(let x=0;x<Wd;x++){let mx=0;for(let j=0;j<step;j++){const v=Math.abs(d[x*step+j]||0);if(v>mx)mx=v;}wctx.moveTo(x,mid-mx*mid*0.95);wctx.lineTo(x,mid+mx*mid*0.95);}
   wctx.stroke();
-  wctx.strokeStyle='rgba(255,255,255,0.14)';wctx.beginPath();
+  // Every candidate Onset found, dim — this is what shows the knob is doing
+  // something even though the pad COUNT stays pinned to Lanes: drag it and
+  // this set of thin lines thins out or fills in.
+  wctx.strokeStyle='rgba(255,255,255,0.10)';wctx.beginPath();
+  rawOnsets.forEach(o=>{const x=Math.round(o.t/dur*Wd)+0.5;wctx.moveTo(x,0);wctx.lineTo(x,Hd);});
+  wctx.stroke();
+  // The PADS actually chosen from those candidates, bright.
+  wctx.strokeStyle='rgba(255,255,255,0.4)';wctx.lineWidth=1.3;wctx.beginPath();
   for(let s=1;s<SLICES;s++){const x=Math.round(sliceBounds[s]/dur*Wd)+0.5;wctx.moveTo(x,0);wctx.lineTo(x,Hd);}
   wctx.stroke();
 }
@@ -998,11 +1042,12 @@ cv.addEventListener('contextmenu',e=>{e.preventDefault();const cell=evCell(e);if
 function updateRead(){const r=document.getElementById('read');if(!r)return;
   const filled=grid?grid.reduce((s,v)=>s+(v>=0?1:0),0):0,tot=LANES*COLS,lk=locked?locked.reduce((s,v)=>s+v,0):0;
   let hits=0;if(grid)for(const v of grid)if(v>0)hits++;
-  r.innerHTML='grid: <b>'+COLS+'×'+LANES+'</b> · '+(solving?'collapsing '+filled+'/'+tot:(solveDone?'solved':'blank'))+'<br>active taps: '+hits+' · locked: '+lk+' · pads: '+PADS+' · transients: '+SLICES;}
+  r.innerHTML='grid: <b>'+COLS+'×'+LANES+'</b> · '+(solving?'collapsing '+filled+'/'+tot:(solveDone?'solved':'blank'))+'<br>active taps: '+hits+' · locked: '+lk+' · pads: '+PADS+' · onsets found: '+rawOnsets.length;}
 function setModeLine(){const e=document.getElementById('modev');if(e)e.textContent=(rulesMode==='learned'?'learned — '+(learnedInfo||''):(learnedInfo||'source order'));}
 
 /* ---------- presets ---------- */
 function getPreset(){return{v:1,app:'wfc-sampler',bpm:BPM,stepDiv:stepDivIdx,glide:glideMs,wet:+wetEl.value,fb:+fbEl.value,slicePct:+slicepctEl.value,
+  attack:attackMs,release:releaseMs,
   output:outputLevel,tone:toneHz,width:widthAmt,time:delayMult,cols:COLS,lanes:LANES,sensitivity,rulesMode,learnedInfo,
   rules:{allowR,allowL,allowD,allowU,w:W_,startMask},
   gridTiles:Array.from(grid),locks:Array.from(locked),
@@ -1015,6 +1060,8 @@ async function loadPreset(o){
   glideMs=o.glide??60;glideEl.value=glideMs;setv('glidev',glideMs);
   wetEl.value=o.wet??78;setv('wetv',wetEl.value);fbEl.value=o.fb??34;setv('fbv',fbEl.value);
   slicepctEl.value=o.slicePct??70;setv('slicepctv',slicepctEl.value);
+  attackMs=o.attack??3;atkEl.value=attackMs;setv('atkv',attackMs+'ms');
+  releaseMs=o.release??40;relEl.value=releaseMs;setv('relv',releaseMs+'ms');
   outputLevel=o.output??1;toneHz=o.tone??18000;widthAmt=o.width??1;delayMult=o.time??1;
   outpEl.value=Math.round(outputLevel*100);setv('outpv',outpEl.value);toneEl.value=toneHz;setv('tonev',toneHz>=1000?(toneHz/1000).toFixed(1)+'k':toneHz);widthEl.value=Math.round(widthAmt*100);setv('widthv',widthEl.value);
   [...timeseg.children].forEach(c=>c.classList.toggle('on',+c.dataset.t===delayMult));
@@ -1039,6 +1086,7 @@ async function loadPreset(o){
 const playBtn=document.getElementById('play'),collapseBtn=document.getElementById('collapse'),reseedBtn=document.getElementById('reseed'),regenBtn=document.getElementById('regen');
 const bpmEl=document.getElementById('bpm'),stepdivEl=document.getElementById('stepdiv');
 const wetEl=document.getElementById('wet'),fbEl=document.getElementById('fb'),slicepctEl=document.getElementById('slicepct'),glideEl=document.getElementById('glide');
+const atkEl=document.getElementById('atk'),relEl=document.getElementById('rel');
 const colsEl=document.getElementById('cols'),lanesEl=document.getElementById('lanes'),sensEl=document.getElementById('sens');
 const outpEl=document.getElementById('outp'),toneEl=document.getElementById('tone'),widthEl=document.getElementById('width'),timeseg=document.getElementById('timeseg');
 const setv=(id,v)=>{const e=document.getElementById(id);if(e)e.textContent=v;};
@@ -1066,6 +1114,8 @@ glideEl.addEventListener('input',()=>{glideMs=+glideEl.value;setv('glidev',glide
 wetEl.addEventListener('input',()=>{setv('wetv',wetEl.value);applyMix();});
 fbEl.addEventListener('input',()=>{setv('fbv',fbEl.value);applyMix();});
 slicepctEl.addEventListener('input',()=>{setv('slicepctv',slicepctEl.value);lanes.forEach(p=>p.slicePct=+slicepctEl.value);if(selLane!=null)buildEditor();});
+atkEl.addEventListener('input',()=>{attackMs=+atkEl.value;setv('atkv',attackMs+'ms');});
+relEl.addEventListener('input',()=>{releaseMs=+relEl.value;setv('relv',releaseMs+'ms');});
 colsEl.addEventListener('input',()=>setv('colsv',colsEl.value));
 lanesEl.addEventListener('input',()=>setv('lanesv',lanesEl.value));
 sensEl.addEventListener('input',()=>{sensitivity=+sensEl.value;setv('sensv',sensitivity+'%');recomputeSlices();});

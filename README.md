@@ -650,9 +650,23 @@ a named sound rather than a synthetic dynamic.
 sample — there's nothing rolling and nothing precomputed per direction, so the ScriptProcessor capture
 node the multitap engine needs doesn't exist here at all.
 
-**Mini-scope doubles as a slice map.** The small waveform display shows the loaded sample with its pad
-boundaries marked, and each triggered pad flashes in the color of the tile that fired it — a second,
-sample-accurate view of what the grid is doing, live.
+**Mini-scope doubles as a slice map, and shows Onset actually working.** Since the pad *count* is pinned
+to Lanes, moving Onset never changes a number in the readout the way it used to — so the map now draws
+two tiers: every raw candidate onset the detector finds, dim, and the pads actually chosen from them,
+bright. Drag Onset and the dim lines visibly thin out or fill in, and the bright ones shift as different
+candidates win the fixed pad slots — that's the feedback loop that was missing. The readout also states
+the raw count directly (`onsets found: N`), and each triggered pad flashes in the color of the tile that
+fired it.
+
+**Layout: everything that acts on the grid lives right above it.** Brush, tile palette, Steps, Lanes,
+Onset and the slice map sit in a bar directly over the canvas, not buried in the side panel — reaching
+for any of them while painting doesn't mean hunting across the device. The side panel keeps Transport,
+Rules · learn, Mix and Output, the same as the WFC Multitap device.
+
+**Attack / Release.** Each pad's envelope is a plain, user-controllable trapezoid: ramp up over Attack,
+hold flat, ramp down over Release, both clamped to fit inside whatever length Slice % leaves for that
+note. The pad's own decay is already baked into the recording — this shapes the entry and exit around it,
+not a synthetic contour imposed on top.
 
 **Everything else matches the WFC Multitap device**: per-lane mixer, lane editor (Pitch, Cutoff, Pan,
 Feedback, Slice %), the same modular FX rack, master limiter, global Output/Tone/Width/Time, Save/Load
